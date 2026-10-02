@@ -1,0 +1,1 @@
+export const COMPACT_BUFFER_TOKENS = 3_000

@@ -1,0 +1,14 @@
+{
+  "name": "context-view",
+  "description": "The context-view mod: the context window as one row above the Claude Code prompt.",
+  "owner": {
+    "name": "kongyo2"
+  },
+  "plugins": [
+    {
+      "name": "context-view",
+      "source": "./",
+      "description": "The context window as one row above the prompt, drawn the way Claude Code draws its own meters."
+    }
+  ]
+}

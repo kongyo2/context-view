@@ -1,0 +1,4 @@
+{
+  "description": "The context view: its row above the prompt, the readings it takes whenever the window moves (the session's start, /clear, a resume or a branch, each turn and request of one, a compaction, a model switch, a change to auto-compact), a check of the engine's live figures every two seconds, and /context-view to hide and show it",
+  "modules": ["./register.ts"]
+}

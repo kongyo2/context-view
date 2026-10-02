@@ -1,0 +1,1 @@
+export const DEFAULT_RESERVE_TOKENS = 33_000

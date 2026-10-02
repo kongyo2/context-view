@@ -1,0 +1,1 @@
+export const LOW_HEADROOM_TOKENS = 20_000

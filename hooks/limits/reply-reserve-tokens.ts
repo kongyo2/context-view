@@ -1,0 +1,1 @@
+export const REPLY_RESERVE_TOKENS = 20_000

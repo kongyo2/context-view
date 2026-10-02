@@ -1,0 +1,1 @@
+export const MANUAL_RESERVE_TOKENS = 23_000
