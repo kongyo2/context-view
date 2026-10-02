@@ -4,11 +4,15 @@ import type { Cell } from './cell.js'
 
 /**
  * The meter's cells, left to right, as /context lays its grid out: the
- * context's whole cells, the one it part fills, the window left, and the
- * compaction reserve at the end. A context past the threshold fills the
- * reserve's cells too.
+ * context's whole cells, the one it part fills, the window left, and at the
+ * end the reserve, everything past the compaction threshold.
  *
- * @param window the window measured against and its reserve
+ * The meter spans the model's window, as the percentage and the token count
+ * do, so where a setting caps the window compaction measures against, the
+ * capped part is reserve too. A context past the threshold fills the
+ * reserve's cells.
+ *
+ * @param window the window, its compaction limit and its reserve
  * @param fill the context's tokens
  * @param cells how many cells across
  * @returns one cell kind per cell
@@ -18,17 +22,16 @@ export function meterOf(
   fill: ContextViewFill,
   cells: number,
 ): Cell[] {
-  const limit = Math.max(1, window.limit)
+  const scale = Math.max(1, window.window)
+  const threshold = Math.max(0, window.limit - window.buffer)
+  const reserved = Math.max(0, scale - threshold)
 
   const reserve =
-    window.buffer > 0
-      ? Math.min(
-          cells,
-          Math.max(1, Math.round((window.buffer / limit) * cells)),
-        )
+    reserved > 0
+      ? Math.min(cells, Math.max(1, Math.round((reserved / scale) * cells)))
       : 0
 
-  const exact = (Math.max(0, fill.tokens) / limit) * cells
+  const exact = (Math.max(0, fill.tokens) / scale) * cells
   const share = exact - Math.floor(exact)
 
   let used = Math.min(cells, Math.floor(exact))

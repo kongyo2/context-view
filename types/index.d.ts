@@ -12,12 +12,14 @@ export type ContextViewWindow = {
 }
 
 /**
- * How full the window is, from the last response: the input tokens it was
- * answered over, and that count over the window as a whole percentage.
+ * How full the window is: the input tokens the last response was answered
+ * over, that count over the window as a whole percentage, and whether it is
+ * the engine's local estimate, standing in until a response has landed.
  */
 export type ContextViewFill = {
   tokens: number
   percent: number
+  isEstimate: boolean
 }
 
 declare module 'claude-code' {

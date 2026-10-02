@@ -246,6 +246,55 @@ describe('band', () => {
     await ui.unmount()
   })
 
+  test("an estimate draws in the same tones, each figure marked with Claude Code's '~'", async ($, on) => {
+    Fixtures.drawsBand(on, Fixtures.WINDOW, Fixtures.fillAt(84_100, true))
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(Fixtures.tonesOf(await ui.findAll({ type: 'Text' }))).toEqual([
+      ['▰'.repeat(8), 'permission'],
+      ['▱', 'permission'],
+      ['▱'.repeat(8), 'dim'],
+      ['▰'.repeat(3), 'dim'],
+      ['~42%', 'permission'],
+      [' · ', 'dim'],
+      ['~84.1k/200k tokens', 'dim'],
+      [' · ', 'dim'],
+      ['~82.9k until auto-compact', 'dim'],
+    ])
+
+    await ui.unmount()
+  })
+
+  test('a window capped below the model draws all past its threshold as reserve', async ($, on) => {
+    const capped = {
+      ...Fixtures.WINDOW,
+      window: 1_000_000,
+      limit: 150_000,
+    }
+
+    Fixtures.drawsBand(on, capped, {
+      tokens: 33_800,
+      percent: 3,
+      isEstimate: false,
+    })
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(Fixtures.tonesOf(await ui.findAll({ type: 'Text' }))).toEqual([
+      ['▱', 'permission'],
+      ['▱', 'dim'],
+      ['▰'.repeat(18), 'dim'],
+      ['3%', 'permission'],
+      [' · ', 'dim'],
+      ['33.8k/1m tokens', 'dim'],
+      [' · ', 'dim'],
+      ['83.2k until auto-compact', 'dim'],
+    ])
+
+    await ui.unmount()
+  })
+
   test('the blocks draw the same cells', async ($, on) => {
     Fixtures.drawsBand(
       on,

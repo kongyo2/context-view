@@ -2,6 +2,7 @@ import type { On, RenderElement } from 'claude-code'
 import { mock } from 'claude-code/testing'
 
 import { ENGINE_TEXT } from './engine-text.js'
+import { SUMMARY } from './summary.js'
 import { usageOf } from './usage-of.js'
 import type { World } from './world.js'
 
@@ -15,10 +16,11 @@ const ENGINE_DRAWING: RenderElement = {
 }
 
 /**
- * Answers what every session asks beneath the plugin: its start, the clear
- * and resume events, each measurement, the command it registers, the
- * environment, the store, the usage, and the engine's own band where the
- * plugin passes.
+ * Answers what every session asks beneath the plugin: its start, the clear,
+ * resume and model-switch events, each measurement, the command it
+ * registers, the engine's own compaction, settings and commands, the
+ * environment, the store, the usage, the debug log, the clock, and the
+ * engine's own band where the plugin passes.
  *
  * @param on the test's `on`
  * @param tokens the context's tokens; left out before the first response
@@ -33,18 +35,30 @@ export function startsSession(
   const world: World = {
     store: new Map(),
     commands: [],
+    refusal: null,
     usage: usageOf(tokens),
     asked: [],
+    compaction: { messages: [SUMMARY] },
+    logs: [],
+    clock: mock.clock(on),
   }
 
   mock.env(on, variables)
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('classic.SessionStart', () => ({}))
+  on('classic.PostModelSwitch', () => ({}))
   on('session.measure', ($, e) => ({ changed: e.changed }))
+  on('session.compact', () => world.compaction)
+  on('config.set', ($, e) => ({ value: e.value }))
+  on('command.run', () => ({ text: 'run by Claude Code' }))
 
   on('command.register', ($, e) => {
-    world.commands.push(e.name)
+    if (world.refusal !== null) {
+      return { deny: world.refusal }
+    }
+
+    world.commands.push(e)
 
     return { value: { command: e.name } }
   })
@@ -61,6 +75,14 @@ export function startsSession(
     world.asked.push(e.breakdown)
 
     return world.usage ? { value: world.usage } : { deny: 'no session bound' }
+  })
+
+  on('ui.log', ($, e) => {
+    if (e.to === 'debug') {
+      world.logs.push(e.text)
+    }
+
+    return { value: undefined }
   })
 
   on('ui.render', () => ENGINE_DRAWING)

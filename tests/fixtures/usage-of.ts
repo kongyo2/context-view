@@ -7,30 +7,44 @@ import { WINDOW_TOKENS } from './window-tokens.js'
 /**
  * What `$.session.usage({ breakdown: 'summary' })` answers for a session
  * whose context holds `tokens`: the window, its fill once a response has
- * landed (none while `tokens` is left out), and a breakdown with the
- * auto-compact threshold a reserve under the window, or with auto-compact
- * off and a manual buffer row instead.
+ * landed (none while `tokens` is left out), and a breakdown totalling the
+ * same, or the engine's estimate before then; with the auto-compact
+ * threshold a reserve under the window (or under the window a setting caps
+ * it to), or with auto-compact off and a manual buffer row instead.
  *
  * @param tokens the context's tokens; left out before the first response
- * @param options `isAutoCompact`: false for a session with auto-compact off
+ * @param options `isAutoCompact`: false for a session with auto-compact off;
+ *   `estimate`: the breakdown's total while no response has landed;
+ *   `window`: the model's window, the fixtures' when left out; `limit`: the
+ *   window compaction measures against, when a setting caps it
  * @returns the usage
  */
 export function usageOf(
   tokens?: number,
-  options: { isAutoCompact?: boolean } = {},
+  options: {
+    isAutoCompact?: boolean
+    estimate?: number
+    window?: number
+    limit?: number
+  } = {},
 ): SessionUsage {
-  const { isAutoCompact = true } = options
-  const used = tokens ?? 0
+  const {
+    isAutoCompact = true,
+    estimate = 0,
+    window = WINDOW_TOKENS,
+    limit = window,
+  } = options
+  const used = tokens ?? estimate
   const reserve = isAutoCompact ? RESERVE_TOKENS : MANUAL_RESERVE_TOKENS
 
   return {
     startedAt: 0,
     rateLimits: [],
     context: {
-      window: WINDOW_TOKENS,
+      window,
       ...(tokens !== undefined && {
         tokens,
-        percent: Math.round((tokens / WINDOW_TOKENS) * 100),
+        percent: Math.round((tokens / window) * 100),
       }),
       breakdown: {
         categories: [
@@ -50,24 +64,24 @@ export function usageOf(
           },
           {
             name: 'Free space',
-            tokens: Math.max(0, WINDOW_TOKENS - used - reserve),
+            tokens: Math.max(0, limit - used - reserve),
             color: 'promptBorder',
             isDeferred: false,
             kind: 'free',
           },
         ],
         totalTokens: used,
-        maxTokens: WINDOW_TOKENS,
-        rawMaxTokens: WINDOW_TOKENS,
+        maxTokens: limit,
+        rawMaxTokens: limit,
         autocompactSource: 'model-default',
-        percentage: Math.round((used / WINDOW_TOKENS) * 100),
+        percentage: Math.round((used / limit) * 100),
         gridRows: [],
         model: 'claude-test',
         memoryFiles: [],
         mcpTools: [],
         agents: [],
         ...(isAutoCompact && {
-          autoCompactThreshold: WINDOW_TOKENS - RESERVE_TOKENS,
+          autoCompactThreshold: limit - RESERVE_TOKENS,
         }),
         isAutoCompactEnabled: isAutoCompact,
         apiUsage: null,

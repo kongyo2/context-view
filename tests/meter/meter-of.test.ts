@@ -98,11 +98,44 @@ describe('meter-of', () => {
 
   test('a window of a million tokens measures the same way', () => {
     const wide = { ...Fixtures.WINDOW, window: 1_000_000, limit: 1_000_000 }
+    const fill = { tokens: 500_000, percent: 50, isEstimate: false }
 
-    expect(Meter.meterOf(wide, { tokens: 500_000, percent: 50 }, 20)).toEqual([
+    expect(Meter.meterOf(wide, fill, 20)).toEqual([
       ...cells('used', 10),
       ...cells('free', 9),
       'reserve',
     ])
+  })
+
+  test("a window capped below the model's spans the whole window, all past its threshold reserve", () => {
+    const capped = { ...Fixtures.WINDOW, window: 1_000_000, limit: 150_000 }
+    const fillAt = (tokens: number) => ({
+      tokens,
+      percent: 0,
+      isEstimate: false,
+    })
+
+    expect(Meter.meterOf(capped, fillAt(33_800), 20)).toEqual([
+      'partial',
+      'free',
+      ...cells('reserve', 18),
+    ])
+
+    expect(Meter.meterOf(capped, fillAt(100_000), 20)).toEqual([
+      ...cells('used', 2),
+      ...cells('reserve', 18),
+    ])
+
+    expect(Meter.meterOf(capped, fillAt(130_000), 20)).toEqual([
+      ...cells('used', 2),
+      'partial',
+      ...cells('reserve', 17),
+    ])
+  })
+
+  test('an estimate draws as a figure does', () => {
+    expect(
+      Meter.meterOf(Fixtures.WINDOW, Fixtures.fillAt(84_100, true), 20),
+    ).toEqual(Meter.meterOf(Fixtures.WINDOW, Fixtures.fillAt(84_100), 20))
   })
 })

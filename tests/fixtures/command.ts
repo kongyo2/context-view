@@ -1,12 +1,8 @@
 import type { CommandRunInput } from 'claude-code'
 
+import { commandOf } from './command-of.js'
+
 /**
- * `/context-view` as the person types it, with no arguments, under the
- * fullscreen layout on a 160-column terminal.
+ * `/context-view` as the person types it, with no arguments.
  */
-export const COMMAND: CommandRunInput = {
-  command: 'context-view',
-  args: '',
-  origin: { kind: 'composer' },
-  presentation: { isFullscreen: true, columns: 160 },
-}
+export const COMMAND: CommandRunInput = commandOf('context-view')

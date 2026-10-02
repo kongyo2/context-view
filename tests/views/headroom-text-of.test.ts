@@ -21,4 +21,30 @@ describe('headroom-text-of', () => {
     expect(textAt(84_100)).toBe('112.9k before the limit')
     expect(textAt(197_000)).toBe('run /compact to continue')
   })
+
+  test('a count from an estimate is marked as one; the words without a count are not', () => {
+    const textAt = (window: typeof Fixtures.WINDOW, tokens: number) =>
+      Views.headroomTextOf(window, Fixtures.fillAt(tokens, true))
+
+    expect(textAt(Fixtures.WINDOW, 84_100)).toBe('~82.9k until auto-compact')
+    expect(textAt(Fixtures.MANUAL_WINDOW, 84_100)).toBe(
+      '~112.9k before the limit',
+    )
+    expect(textAt(Fixtures.WINDOW, 170_000)).toBe('auto-compact next')
+    expect(textAt(Fixtures.MANUAL_WINDOW, 197_000)).toBe(
+      'run /compact to continue',
+    )
+  })
+
+  test('a capped window counts down to its own threshold', () => {
+    const capped = { ...Fixtures.WINDOW, window: 1_000_000, limit: 150_000 }
+
+    expect(
+      Views.headroomTextOf(capped, {
+        tokens: 33_800,
+        percent: 3,
+        isEstimate: false,
+      }),
+    ).toBe('83.2k until auto-compact')
+  })
 })

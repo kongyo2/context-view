@@ -22,11 +22,25 @@ describe('segments-of', () => {
     ).toEqual({ text: '7k until auto-compact', isDim: false })
   })
 
+  test("an estimate marks each of its figures as Claude Code marks one, '~'", () => {
+    expect(
+      Views.segmentsOf(Fixtures.WINDOW, Fixtures.fillAt(15_900, true)),
+    ).toEqual([
+      { text: '~8%', isDim: false },
+      { text: '~15.9k/200k tokens', isDim: true },
+      { text: '~151.1k until auto-compact', isDim: true },
+    ])
+  })
+
   test('a window of a million prints as Claude Code prints it', () => {
     const wide = { ...Fixtures.WINDOW, window: 1_000_000, limit: 1_000_000 }
 
     expect(
-      Views.segmentsOf(wide, { tokens: 250_000, percent: 25 })[1]?.text,
+      Views.segmentsOf(wide, {
+        tokens: 250_000,
+        percent: 25,
+        isEstimate: false,
+      })[1]?.text,
     ).toBe('250k/1m tokens')
   })
 })
