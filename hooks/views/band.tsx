@@ -17,6 +17,7 @@ export function band(
   kit: Kit,
   window: ContextViewWindow,
   fill: ContextViewFill,
+  beneath?: RenderElement,
 ): RenderElement {
   const { Box, Text } = kit.ui
   const color = Levels.LEVEL_COLORS[Levels.levelOf(window, fill)]
@@ -26,7 +27,7 @@ export function band(
     segmentsOf(window, fill),
   )
 
-  return (
+  const row = (
     <Box paddingLeft={Limits.BAND_INSET} paddingRight={Limits.COLLAPSE_RESERVE}>
       <Text wrap="truncate-end">
         {bar(kit, Meter.meterOf(window, fill, fit.cells), color)}
@@ -38,6 +39,17 @@ export function band(
           </Text>,
         ])}
       </Text>
+    </Box>
+  )
+
+  if (!beneath) {
+    return row
+  }
+
+  return (
+    <Box flexDirection="column">
+      {row}
+      {beneath}
     </Box>
   )
 }

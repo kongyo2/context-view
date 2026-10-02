@@ -5,5 +5,7 @@
   "author": {
     "name": "kongyo2"
   },
+  "homepage": "https://github.com/kongyo2/context-view",
+  "repository": "https://github.com/kongyo2/context-view",
   "types": "./types/index.d.ts"
 }

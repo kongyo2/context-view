@@ -1,16 +1,10 @@
-import type { On, RenderElement } from 'claude-code'
+import type { On } from 'claude-code'
 import { mock } from 'claude-code/testing'
 
-import { ENGINE_TEXT } from './engine-text.js'
+import { EMPTY_DRAWING } from './empty-drawing.js'
 import { SUMMARY } from './summary.js'
 import { usageOf } from './usage-of.js'
 import type { World } from './world.js'
-
-const ENGINE_DRAWING: RenderElement = {
-  type: 'Text',
-  props: {},
-  children: [ENGINE_TEXT],
-}
 
 export function startsSession(
   on: On,
@@ -49,7 +43,13 @@ export function startsSession(
     return { value: { command: e.name } }
   })
 
-  on('store.get', ($, e) => ({ value: world.store.get(e.key) }))
+  on('store.get', ($, e) => {
+    if (world.refusals.load !== undefined) {
+      return { deny: world.refusals.load }
+    }
+
+    return { value: world.store.get(e.key) }
+  })
 
   on('store.set', ($, e) => {
     if (world.refusals.save !== undefined) {
@@ -87,7 +87,7 @@ export function startsSession(
     return { value: undefined }
   })
 
-  on('ui.render', () => ENGINE_DRAWING)
+  on('ui.render', () => EMPTY_DRAWING)
 
   return world
 }

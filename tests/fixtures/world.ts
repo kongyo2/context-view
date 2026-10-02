@@ -12,7 +12,12 @@ export type World = {
   lag: number
   asked: unknown[]
   compaction: SessionCompactResult
-  refusals: { register?: string; breakdown?: string; save?: string }
+  refusals: {
+    register?: string
+    breakdown?: string
+    load?: string
+    save?: string
+  }
   logs: string[]
   clock: MockClock
 }

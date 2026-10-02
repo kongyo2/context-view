@@ -30,6 +30,8 @@ const isHidden = atom(
 
 let latest = 0
 
+let knownHidden: boolean | undefined
+
 export function register(on: On): void {
   let glyphs: Glyphs.GlyphSet = Glyphs.PILL_GLYPHS
   let rechecking: Timer | undefined
@@ -61,6 +63,20 @@ export function register(on: On): void {
   on(
     'classic.SessionStart',
     { source: ['clear', 'resume', 'fork'] },
+    async ($, e, next) => {
+      const result = await next(e)
+
+      await loadHidden($)
+      await measure($)
+      settle($)
+
+      return result
+    },
+  )
+
+  on(
+    'command.run',
+    { command: ['clear', 'resume', 'branch'] },
     async ($, e, next) => {
       const result = await next(e)
 
@@ -124,13 +140,17 @@ export function register(on: On): void {
     return result
   })
 
-  on('command.run', { command: 'autocompact' }, async ($, e, next) => {
-    const result = await next(e)
+  on(
+    'command.run',
+    { command: ['autocompact', 'model'] },
+    async ($, e, next) => {
+      const result = await next(e)
 
-    settle($)
+      settle($)
 
-    return result
-  })
+      return result
+    },
+  )
 
   on('command.run', { command: 'context-view' }, async ($, e) => {
     const hidden = Command.hiddenOf(e.args, await read($, isHidden))
@@ -139,6 +159,7 @@ export function register(on: On): void {
       return { text: Names.USAGE_TEXT }
     }
 
+    knownHidden = hidden
     await update($, isHidden, () => hidden)
 
     await $.store
@@ -169,6 +190,7 @@ export function register(on: On): void {
       },
       measured,
       filled,
+      await next(e),
     )
   })
 }
@@ -181,11 +203,17 @@ async function glyphsFor($: EngineInterface): Promise<Glyphs.GlyphSet> {
 }
 
 async function loadHidden($: EngineInterface): Promise<void> {
-  const stored = await $.store
-    .get(Names.STORE_HIDDEN_KEY)
-    .catch(() => undefined)
+  const hidden = await $.store.get(Names.STORE_HIDDEN_KEY).then(
+    stored => stored === true,
+    () => knownHidden,
+  )
 
-  await update($, isHidden, () => stored === true).catch(() => undefined)
+  if (hidden === undefined) {
+    return
+  }
+
+  knownHidden = hidden
+  await update($, isHidden, () => hidden).catch(() => undefined)
 }
 
 async function measure(
@@ -278,6 +306,10 @@ async function recheck($: EngineInterface): Promise<void> {
     const { context } = await $.session.usage()
     const measured = await read($, contextWindow)
     const filled = await read($, contextFill)
+
+    if (!measured) {
+      await loadHidden($)
+    }
 
     if (Readings.isOutdated(context, measured, filled)) {
       await measure($)

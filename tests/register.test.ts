@@ -243,7 +243,7 @@ describe('register', () => {
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
-    expect(Fixtures.textOf(await ui.drawn())).toBe(Fixtures.ENGINE_TEXT)
+    expect(Fixtures.textOf(await ui.drawn())).toBe('')
 
     expect(await $.command.run(Fixtures.COMMAND)).toEqual({
       text: 'Context view shown',
@@ -281,7 +281,7 @@ describe('register', () => {
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
-    expect(Fixtures.textOf(await ui.drawn())).toBe(Fixtures.ENGINE_TEXT)
+    expect(Fixtures.textOf(await ui.drawn())).toBe('')
 
     await ui.unmount()
   })
@@ -304,7 +304,7 @@ describe('register', () => {
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
-    expect(Fixtures.textOf(await ui.drawn())).toBe(Fixtures.ENGINE_TEXT)
+    expect(Fixtures.textOf(await ui.drawn())).toBe('')
 
     await ui.unmount()
   })
@@ -318,7 +318,7 @@ describe('register', () => {
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
-    expect(Fixtures.textOf(await ui.drawn())).toBe(Fixtures.ENGINE_TEXT)
+    expect(Fixtures.textOf(await ui.drawn())).toBe('')
 
     await ui.unmount()
   })
@@ -336,9 +336,7 @@ describe('register', () => {
       world.store.set('isHidden', true)
       await $.classic.SessionStart({ source })
 
-      expect(Fixtures.textOf(await ui.drawn()), source).toBe(
-        Fixtures.ENGINE_TEXT,
-      )
+      expect(Fixtures.textOf(await ui.drawn()), source).toBe('')
 
       world.store.set('isHidden', false)
       await $.classic.SessionStart({ source })
@@ -380,7 +378,7 @@ describe('register', () => {
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
-    expect(Fixtures.textOf(await ui.drawn())).toBe(Fixtures.ENGINE_TEXT)
+    expect(Fixtures.textOf(await ui.drawn())).toBe('')
 
     await ui.unmount()
   })
@@ -700,6 +698,132 @@ describe('register', () => {
     await ui.unmount()
   })
 
+  test(
+    'the band keeps what the mods after it draw there, on every surface',
+    { plugins: [Fixtures.NOTE_MOD] },
+    async ($, on) => {
+      Fixtures.startsSession(on, 84_100)
+
+      await $.session.start(Fixtures.SESSION)
+
+      for (const surface of Fixtures.SURFACES) {
+        const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface })
+
+        expect(Fixtures.textOf(await ui.drawn()), surface).toBe(
+          CALM_LINE + Fixtures.NOTE_TEXT,
+        )
+
+        await ui.unmount()
+      }
+
+      await $.command.run(Fixtures.commandOf('context-view', 'hide'))
+
+      const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+      expect(
+        Fixtures.textOf(await ui.drawn()),
+        'hidden, the band is the other mods',
+      ).toBe(Fixtures.NOTE_TEXT)
+
+      await ui.unmount()
+    },
+  )
+
+  test(
+    'where the built-in guard holds settings-hook events back, /clear, /resume and /branch still bring back the choice and the window',
+    { plugins: [Fixtures.GUARD] },
+    async ($, on) => {
+      const world = Fixtures.startsSession(on, 84_100)
+
+      await $.session.start(Fixtures.SESSION)
+
+      const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+      const readings = readingsOf(world)
+
+      await $.classic.SessionStart({ source: 'clear' })
+
+      expect(readingsOf(world), 'the guard held the event back').toBe(readings)
+
+      for (const command of ['clear', 'resume', 'branch']) {
+        world.store.set('isHidden', true)
+        await $.command.run(Fixtures.commandOf(command))
+
+        expect(Fixtures.textOf(await ui.drawn()), command).toBe('')
+
+        world.store.set('isHidden', false)
+        world.usage = Fixtures.usageOf(120_000)
+        await $.command.run(Fixtures.commandOf(command))
+
+        expect(await percentOf(ui), command).toEqual(['60%'])
+
+        world.usage = Fixtures.usageOf(84_100)
+      }
+
+      await ui.unmount()
+    },
+  )
+
+  test(
+    'where the guard holds PostModelSwitch back, /model is read once it lands',
+    { plugins: [Fixtures.GUARD] },
+    async ($, on) => {
+      const world = Fixtures.startsSession(on, 84_100)
+
+      await $.session.start(Fixtures.SESSION)
+
+      const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+      await $.classic.PostModelSwitch(Fixtures.MODEL_SWITCH)
+      world.usage = Fixtures.usageOf(84_100, { window: 1_000_000 })
+      await world.clock.advance(Fixtures.FIRST_READING_MS)
+
+      expect(await percentOf(ui), 'the guard held the event back').toEqual([
+        '42%',
+      ])
+
+      await $.command.run(Fixtures.commandOf('model', 'claude-test-wide'))
+      await world.clock.advance(Fixtures.FIRST_READING_MS)
+
+      expect(await percentOf(ui)).toEqual(['8%'])
+
+      await ui.unmount()
+    },
+  )
+
+  test('a reload whose read of the stored choice fails keeps the band as it was', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    await $.session.start(Fixtures.SESSION)
+    await $.command.run(Fixtures.commandOf('context-view', 'hide'))
+
+    world.refusals.load = 'store is unavailable'
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(Fixtures.textOf(await ui.drawn())).toBe('')
+
+    await ui.unmount()
+  })
+
+  test('a live check that finds no reading held, as after a reset, reads the stored choice again', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    world.usage = null
+
+    await $.session.start(Fixtures.SESSION)
+
+    world.store.set('isHidden', true)
+    world.usage = Fixtures.usageOf(84_100)
+    await world.clock.advance(Fixtures.RECHECK_MS)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(Fixtures.textOf(await ui.drawn())).toBe('')
+
+    await ui.unmount()
+  })
+
   test('a survey keeps the band', async ($, on) => {
     Fixtures.startsSession(on, 84_100)
 
@@ -710,7 +834,7 @@ describe('register', () => {
       surface: 'terminal',
     })
 
-    expect(Fixtures.textOf(await ui.drawn())).toBe(Fixtures.ENGINE_TEXT)
+    expect(Fixtures.textOf(await ui.drawn())).toBe('')
 
     await ui.unmount()
   })
@@ -757,7 +881,7 @@ describe('register', () => {
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
-    expect(Fixtures.textOf(await ui.drawn())).toBe(Fixtures.ENGINE_TEXT)
+    expect(Fixtures.textOf(await ui.drawn())).toBe('')
 
     expect(world.logs).toEqual([
       'could not read the context window: context-view: $.session.usage: ' +

@@ -74,7 +74,9 @@ stays; once even that does not fit, the headroom goes, then the tokens,
 the meter widening again each time, and the percentage stays. In Ghostty
 the meter is drawn in `█` and `░`, as Claude Code draws its own there.
 Nothing is drawn while a survey holds the band, while the row is hidden,
-or while the engine has neither a figure nor an estimate.
+or while the engine has neither a figure nor an estimate. Every mod shares
+the band, so what the mods after this one draw there, Claude Code's own
+notes among them, stays below the row.
 
 Counts print as Claude Code prints them (`84.1k`, `200k`, `1m`). The
 percentage is the status line's: the last response's input tokens over
@@ -86,7 +88,16 @@ reserve come from the breakdown `/context` draws, estimated locally with
 no request sent; where no breakdown answers, the 33k Claude Code usually
 keeps stands in. A reading the engine cannot give, a command it will not
 register, and a choice it cannot save go to the debug log (`claude
---debug`) under the plugin's name, and the row keeps its last reading.
+--debug`) under the plugin's name, and the row keeps its last reading. A
+choice the store cannot read back leaves the row as it was. A change to
+`autoCompactEnabled` made by editing a settings file, rather than in
+`/config`, shows after the next turn.
+
+Where Claude Code's built-in guard runs, with managed settings or a Team
+or Enterprise plan, the settings-hook events (`classic.*`) don't reach a
+mod a person installs. The row also follows `/clear`, `/resume`, `/branch`
+and `/model` through the commands themselves, and the check every two
+seconds covers the rest.
 
 `hooks/register.ts` is the module; everything under `hooks/` is its parts,
 importing `claude-code` and one another alone. `types/index.d.ts` declares
@@ -104,15 +115,16 @@ each write draws the row again.
 | `session.compact` | After a compaction of the main window that stands (not one computed ahead of time, a subagent's, or one vetoed): reads the window once the engine has landed it. |
 | `classic.PostModelSwitch` | Reads the new model's window once the engine has moved to it. |
 | `config.set` of `autoCompact` | Reads the window once `/config` has turned auto-compact on or off. |
-| `command.run` of `autocompact` | Passes the command on, then reads the window it set. |
+| `command.run` of `clear`, `resume`, `branch` | Passes the command on, then copies the choice again and reads the window, as the `classic.SessionStart` hook does where the guard holds that event back. |
+| `command.run` of `autocompact`, `model` | Passes the command on, then reads the window it set. |
 | `command.run` of `context-view` | Hides or shows the row as asked, keeps the choice in the store, and says which. |
-| `ui.render` of `AbovePrompt` | Draws the row; passes while a survey holds the band, while the row is hidden, and while there is nothing to draw. |
+| `ui.render` of `AbovePrompt` | Draws the row above what the mods after it draw; passes while a survey holds the band, while the row is hidden, and while there is nothing to draw. |
 
 ## What it calls on `$`
 
 `clock.after` (the readings after a change the engine lands late),
-`clock.every` (the check of the live figures), `command.register`, `env.get` (`TERM` and `TERM_PROGRAM`, once a load, to
-tell Ghostty), `session.usage` (with `breakdown: 'summary'`, estimated
+`clock.every` (the check of the live figures), `command.register`,
+`env.get` (`TERM` and `TERM_PROGRAM`, once a load, to tell Ghostty), `session.usage` (with `breakdown: 'summary'`, estimated
 locally; the plain figures where that fails), `state.get`, `state.set`,
 `store.get`, `store.set`, `ui.log` (to the debug log alone) and
 `ui.resolve`.
@@ -147,8 +159,12 @@ start, the estimate before the first response, measurements, a running
 turn's requests and their replies, `/clear`, a resume, a branch,
 compactions of each kind, a model switch, `/config` and `/autocompact`, a
 rewind, a reading that resolves late, `/context-view` and its words, a
-survey, failed readings, refused calls, Ghostty) on the terminal and the
-desktop, and `tests/views/band.test.ts` reads the drawn row at each
-width and level, as an estimate, and over a capped window. `claude plugin
-validate .` reads this folder as the marketplace it also is; point it at a
-copy without `.claude-plugin/marketplace.json` for the module's own report.
+survey, another mod's note, the built-in guard, failed readings, refused
+calls, Ghostty) on the terminal and the desktop, and
+`tests/views/band.test.ts` reads the drawn row at each width and level, as
+an estimate, and over a capped window.
+
+    claude plugin validate .claude-plugin/plugin.json
+
+reports what the module hooks and calls; `claude plugin validate .` reads
+this folder as the marketplace it also is.
