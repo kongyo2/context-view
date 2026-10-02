@@ -1,0 +1,4 @@
+{
+  "description": "The context view band: its drawing above the prompt, the readings it follows after every turn and every request of a turn, and /context-view to hide and show it",
+  "modules": ["./register.ts"]
+}

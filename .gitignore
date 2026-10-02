@@ -1,0 +1,5 @@
+# Written by Claude Code each time it loads the mod from this folder: the
+# API's declarations for that build, regenerated rather than kept.
+.claude-plugin/types/
+
+node_modules/

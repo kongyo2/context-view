@@ -1,0 +1,9 @@
+{
+  "name": "context-view",
+  "version": "0.1.0",
+  "description": "A compact context window meter above the prompt: how full the window is, the tokens used of its size, and how far auto-compact is, drawn with the symbols /context draws its grid with. /context-view hides and shows it.",
+  "author": {
+    "name": "kongyo2"
+  },
+  "types": "./types/index.d.ts"
+}
