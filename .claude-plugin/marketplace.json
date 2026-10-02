@@ -1,6 +1,6 @@
 {
   "name": "context-view",
-  "description": "The context-view mod: a compact context window meter above the Claude Code prompt.",
+  "description": "The context-view mod: the context window as one row above the Claude Code prompt.",
   "owner": {
     "name": "kongyo2"
   },
@@ -8,7 +8,7 @@
     {
       "name": "context-view",
       "source": "./",
-      "description": "A compact context window meter above the prompt, drawn with the symbols /context draws its grid with."
+      "description": "The context window as one row above the prompt, drawn the way Claude Code draws its own meters."
     }
   ]
 }

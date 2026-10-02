@@ -1,26 +1,19 @@
 import { atom, read, update } from 'claude-code'
 import type {
   EngineInterface,
-  Register,
+  On,
   SessionContextUsage,
   TurnUsage,
 } from 'claude-code'
 
-import { band } from './band'
-import { fillOf, percentOf } from './fill-of'
-import {
-  COMMAND_DESCRIPTION,
-  COMMAND_NAME,
-  HIDDEN_TEXT,
-  SHOWN_TEXT,
-  STORE_HIDDEN_KEY,
-} from './names'
-import { tokensOf } from './tokens-of'
-import { windowOf } from './window-of'
+import Glyphs from './glyphs'
+import Names from './names'
+import Readings from './readings'
+import Views from './views'
 
 /**
  * The window measured against, held by the host so it survives a hot reload
- * of this file; the band redraws whenever it is written.
+ * of this file; the band draws again whenever it is written.
  */
 const contextWindow = atom(
   { plugin: 'context-view', key: 'window' } as const,
@@ -44,19 +37,22 @@ const isHidden = atom(
 
 /**
  * Registers the context view: `/context-view`, the readings the band follows
- * after every main-thread turn and every request of one, and the band's
- * drawing above the prompt.
+ * after every main-thread turn and every request of one, and the band
+ * itself above the prompt.
  *
  * @param on the engine's registrar
  */
-export const register: Register = on => {
+export function register(on: On): void {
+  let glyphs: Glyphs.GlyphSet = Glyphs.PILL_GLYPHS
+
   on('session.start', async ($, e, next) => {
     await $.command.register({
-      name: COMMAND_NAME,
-      description: COMMAND_DESCRIPTION,
+      name: Names.COMMAND_NAME,
+      description: Names.COMMAND_DESCRIPTION,
       immediate: true,
     })
 
+    glyphs = await glyphsFor($)
     await loadHidden($)
 
     const result = await next(e)
@@ -101,9 +97,9 @@ export const register: Register = on => {
     const hidden = !(await read($, isHidden))
 
     await update($, isHidden, () => hidden)
-    await $.store.set(STORE_HIDDEN_KEY, hidden).catch(() => undefined)
+    await $.store.set(Names.STORE_HIDDEN_KEY, hidden).catch(() => undefined)
 
-    return { text: hidden ? HIDDEN_TEXT : SHOWN_TEXT }
+    return { text: hidden ? Names.HIDDEN_TEXT : Names.SHOWN_TEXT }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -117,12 +113,30 @@ export const register: Register = on => {
 
     const { Box, Text } = $.ui.resolve(e)
 
-    return band(
-      { ui: { Box, Text }, columns: e.props.bodyColumns },
+    return Views.band(
+      {
+        ui: { Box, Text },
+        columns: e.props.bodyColumns,
+        glyphs: e.surface === 'terminal' ? glyphs : Glyphs.PILL_GLYPHS,
+      },
       measured,
       filled,
     )
   })
+}
+
+/**
+ * The marks this terminal draws the meter with, as Claude Code picks its
+ * own: the pills, or the blocks in Ghostty.
+ *
+ * @param $ the engine interface
+ * @returns the marks
+ */
+async function glyphsFor($: EngineInterface): Promise<Glyphs.GlyphSet> {
+  const term = await $.env.get('TERM').catch(() => undefined)
+  const program = await $.env.get('TERM_PROGRAM').catch(() => undefined)
+
+  return Glyphs.glyphsOf(term, program)
 }
 
 /**
@@ -132,15 +146,17 @@ export const register: Register = on => {
  * @param $ the engine interface
  */
 async function loadHidden($: EngineInterface): Promise<void> {
-  const stored = await $.store.get(STORE_HIDDEN_KEY).catch(() => undefined)
+  const stored = await $.store
+    .get(Names.STORE_HIDDEN_KEY)
+    .catch(() => undefined)
 
   await update($, isHidden, () => stored === true)
 }
 
 /**
  * Takes a reading: the window and its compaction reserve from the breakdown
- * (estimated locally, no request sent; the plain figures when it fails),
- * and the fill from the context the engine pushed when it did.
+ * (estimated locally, no request sent; the plain figures where that fails),
+ * and the fill from the context the engine pushed, where it pushed one.
  *
  * @param $ the engine interface
  * @param context the context a measurement carried, when one did
@@ -157,8 +173,8 @@ async function measure(
     return
   }
 
-  const measured = windowOf(usage.context)
-  const filled = fillOf(context ?? usage.context)
+  const measured = Readings.windowOf(usage.context)
+  const filled = Readings.fillOf(context ?? usage.context)
 
   await update($, contextWindow, () => measured)
   await update($, contextFill, () => filled)
@@ -179,8 +195,8 @@ async function follow($: EngineInterface, usage: TurnUsage): Promise<void> {
     return
   }
 
-  const tokens = tokensOf(usage)
-  const percent = percentOf(tokens, measured.window)
+  const tokens = Readings.tokensOf(usage)
+  const percent = Readings.percentOf(tokens, measured.window)
 
   await update($, contextFill, () => ({ tokens, percent }))
 }

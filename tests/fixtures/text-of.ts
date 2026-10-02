@@ -1,8 +1,8 @@
 /**
- * A drawn element's text as it reads: its string children, depth first, in
+ * A drawn tree's text as it reads: its string children, depth first, in
  * drawing order.
  *
- * @param node an element a mounted drawing found, a child of one, or a list
+ * @param node a drawing, an element of one, a child or a list
  * @returns the text; '' for nothing
  */
 export function textOf(node: unknown): string {

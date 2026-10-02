@@ -1,21 +1,8 @@
 import type { SessionUsage } from 'claude-code'
 
-/**
- * The window every fixture measures against: 200k tokens.
- */
-export const WINDOW = 200_000
-
-/**
- * The reserve the fixtures' breakdown keeps at the window's end where
- * auto-compact is on: the threshold sits that far under the window.
- */
-export const RESERVE = 33_000
-
-/**
- * The reserve the fixtures' breakdown keeps where auto-compact is off: the
- * small buffer a manual /compact needs.
- */
-export const MANUAL_RESERVE = 3_000
+import { MANUAL_RESERVE_TOKENS } from './manual-reserve-tokens.js'
+import { RESERVE_TOKENS } from './reserve-tokens.js'
+import { WINDOW_TOKENS } from './window-tokens.js'
 
 /**
  * What `$.session.usage({ breakdown: 'summary' })` answers for a session
@@ -34,16 +21,16 @@ export function usageOf(
 ): SessionUsage {
   const { isAutoCompact = true } = options
   const used = tokens ?? 0
-  const reserve = isAutoCompact ? RESERVE : MANUAL_RESERVE
+  const reserve = isAutoCompact ? RESERVE_TOKENS : MANUAL_RESERVE_TOKENS
 
   return {
     startedAt: 0,
     rateLimits: [],
     context: {
-      window: WINDOW,
+      window: WINDOW_TOKENS,
       ...(tokens !== undefined && {
         tokens,
-        percent: Math.round((tokens / WINDOW) * 100),
+        percent: Math.round((tokens / WINDOW_TOKENS) * 100),
       }),
       breakdown: {
         categories: [
@@ -63,23 +50,25 @@ export function usageOf(
           },
           {
             name: 'Free space',
-            tokens: Math.max(0, WINDOW - used - reserve),
+            tokens: Math.max(0, WINDOW_TOKENS - used - reserve),
             color: 'promptBorder',
             isDeferred: false,
             kind: 'free',
           },
         ],
         totalTokens: used,
-        maxTokens: WINDOW,
-        rawMaxTokens: WINDOW,
+        maxTokens: WINDOW_TOKENS,
+        rawMaxTokens: WINDOW_TOKENS,
         autocompactSource: 'model-default',
-        percentage: Math.round((used / WINDOW) * 100),
+        percentage: Math.round((used / WINDOW_TOKENS) * 100),
         gridRows: [],
         model: 'claude-test',
         memoryFiles: [],
         mcpTools: [],
         agents: [],
-        ...(isAutoCompact && { autoCompactThreshold: WINDOW - RESERVE }),
+        ...(isAutoCompact && {
+          autoCompactThreshold: WINDOW_TOKENS - RESERVE_TOKENS,
+        }),
         isAutoCompactEnabled: isAutoCompact,
         apiUsage: null,
       },

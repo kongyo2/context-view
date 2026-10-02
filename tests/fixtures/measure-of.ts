@@ -1,6 +1,6 @@
 import type { SessionMeasureInput } from 'claude-code'
 
-import { WINDOW } from './usage-of'
+import { WINDOW_TOKENS } from './window-tokens.js'
 
 /**
  * The measurement the engine raises after a turn whose last response was
@@ -13,8 +13,8 @@ export function measureOf(tokens: number): SessionMeasureInput {
   return {
     context: {
       tokens,
-      window: WINDOW,
-      percent: Math.round((tokens / WINDOW) * 100),
+      window: WINDOW_TOKENS,
+      percent: Math.round((tokens / WINDOW_TOKENS) * 100),
     },
     rateLimits: [],
     changed: ['context'],
