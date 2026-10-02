@@ -1,41 +1,25 @@
+import { describe, expect, test, tier } from 'claude-code/testing'
 import type { FoundElement } from 'claude-code/testing'
-import { describe, expect, test } from 'claude-code/testing'
 
-import Limits from '../hooks/limits'
 import Fixtures from './fixtures'
 
-/**
- * The surfaces that draw the band above the prompt.
- */
-const SURFACES = ['terminal', 'desktop'] as const
+tier('user')
 
-/**
- * The band at 84.1k of a 200k window, auto-compact on, at the widest meter.
- */
 const CALM_LINE =
   '▰'.repeat(8) +
   '▱'.repeat(9) +
   '▰'.repeat(3) +
   '  42% · 84.1k/200k tokens · 82.9k until auto-compact'
 
-/**
- * The first settle reading's delay, and one past the last.
- */
-const FIRST_SETTLE_MS = Limits.SETTLE_DELAYS_MS[0] ?? 0
-const ALL_SETTLED_MS = Math.max(...Limits.SETTLE_DELAYS_MS) + 1
-
-/**
- * What a drawing's percentage reads, from its Texts.
- *
- * @param ui the mounted band
- * @returns the percentage's texts, `~` and all
- */
 const percentOf = async (ui: {
   findAll: (query: { type: 'Text'; text: RegExp }) => Promise<FoundElement[]>
 }) =>
   (await ui.findAll({ type: 'Text', text: /^~?\d+%$/ })).map(
     found => found.text,
   )
+
+const readingsOf = (world: Fixtures.World) =>
+  world.asked.filter(asked => asked === 'summary').length
 
 describe('register', () => {
   test("the start registers /context-view, its words hinted, and draws the session's context on every surface", async ($, on) => {
@@ -56,7 +40,7 @@ describe('register', () => {
       'summary',
     )
 
-    for (const surface of SURFACES) {
+    for (const surface of Fixtures.SURFACES) {
       const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface })
 
       expect(Fixtures.textOf(await ui.drawn())).toBe(CALM_LINE)
@@ -93,6 +77,31 @@ describe('register', () => {
         '▰'.repeat(3) +
         '  80% · 160k/200k tokens · 7k until auto-compact',
     )
+
+    await ui.unmount()
+  })
+
+  test("a measurement's own figure stands over what the engine answers, and the estimate where it carries none", async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    world.usage = Fixtures.usageOf(100_000)
+    await $.session.measure(Fixtures.measureOf(134_400))
+
+    expect(await percentOf(ui)).toEqual(['67%'])
+
+    world.usage = Fixtures.usageOf(undefined, { estimate: 15_900 })
+
+    await $.session.measure({
+      context: { window: 200_000 },
+      rateLimits: [],
+      changed: ['context'],
+    })
+
+    expect(await percentOf(ui)).toEqual(['~8%'])
 
     await ui.unmount()
   })
@@ -149,6 +158,37 @@ describe('register', () => {
     await ui.unmount()
   })
 
+  test('the last reply counts toward the headroom, as Claude Code counts it toward its threshold', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    Fixtures.answersSteps(on, () => 100_000, 2_000)
+
+    world.usage = Fixtures.usageOf(84_100, { output: 1_200 })
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(
+      await ui.find({ type: 'Text', text: /^81\.7k until auto-compact$/ }),
+      "a reading takes the reply from the breakdown's last response",
+    ).toBeDefined()
+
+    await Fixtures.readToEnd($.turn.step(Fixtures.stepOf()))
+
+    expect(
+      await ui.find({ type: 'Text', text: /^65k until auto-compact$/ }),
+      "a request's reply counts as it lands",
+    ).toBeDefined()
+
+    expect(
+      await ui.find({ type: 'Text', text: /^100k\/200k tokens$/ }),
+      "the tokens stay the status line's",
+    ).toBeDefined()
+
+    await ui.unmount()
+  })
+
   test('a request before any reading measures the window first', async ($, on) => {
     const world = Fixtures.startsSession(on, 84_100)
 
@@ -168,6 +208,24 @@ describe('register', () => {
       await percentOf(ui),
       "the request's own tokens, over the window just measured",
     ).toEqual(['50%'])
+
+    await ui.unmount()
+  })
+
+  test("a request over a capped window counts over the model's window", async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    Fixtures.answersSteps(on, () => 100_000)
+
+    world.usage = Fixtures.usageOf(84_100, { limit: 150_000 })
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    await Fixtures.readToEnd($.turn.step(Fixtures.stepOf()))
+
+    expect(await percentOf(ui)).toEqual(['50%'])
 
     await ui.unmount()
   })
@@ -228,7 +286,30 @@ describe('register', () => {
     await ui.unmount()
   })
 
-  test('a band hidden in an earlier session stays hidden, after /clear too', async ($, on) => {
+  test('a choice the store will not keep is said in the debug log, and this session still follows it', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    world.refusals.save = 'store is read-only'
+
+    await $.session.start(Fixtures.SESSION)
+
+    expect(
+      await $.command.run(Fixtures.commandOf('context-view', 'hide')),
+    ).toEqual({ text: 'Context view hidden' })
+
+    expect(world.logs).toEqual([
+      'could not save whether the band is hidden: context-view: ' +
+        '$.store.set: store is read-only; this session only',
+    ])
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(Fixtures.textOf(await ui.drawn())).toBe(Fixtures.ENGINE_TEXT)
+
+    await ui.unmount()
+  })
+
+  test('a band hidden in an earlier session starts hidden', async ($, on) => {
     const world = Fixtures.startsSession(on, 84_100)
 
     world.store.set('isHidden', true)
@@ -239,9 +320,31 @@ describe('register', () => {
 
     expect(Fixtures.textOf(await ui.drawn())).toBe(Fixtures.ENGINE_TEXT)
 
-    await $.classic.SessionStart({ source: 'clear' })
+    await ui.unmount()
+  })
 
-    expect(Fixtures.textOf(await ui.drawn())).toBe(Fixtures.ENGINE_TEXT)
+  test('the stored choice is read again after /clear, a resume and a branch', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(Fixtures.textOf(await ui.drawn())).toBe(CALM_LINE)
+
+    for (const source of ['clear', 'resume', 'fork'] as const) {
+      world.store.set('isHidden', true)
+      await $.classic.SessionStart({ source })
+
+      expect(Fixtures.textOf(await ui.drawn()), source).toBe(
+        Fixtures.ENGINE_TEXT,
+      )
+
+      world.store.set('isHidden', false)
+      await $.classic.SessionStart({ source })
+
+      expect(Fixtures.textOf(await ui.drawn()), source).toBe(CALM_LINE)
+    }
 
     await ui.unmount()
   })
@@ -299,14 +402,51 @@ describe('register', () => {
     await ui.unmount()
   })
 
-  test('a resumed session draws the context it restored', async ($, on) => {
+  test('a resume is read once the engine has swapped the session in', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    await $.classic.SessionStart({ source: 'resume' })
+    world.usage = Fixtures.usageOf(160_000)
+
+    expect(
+      await percentOf(ui),
+      'the engine swaps the session in after the hook',
+    ).toEqual(['42%'])
+
+    await world.clock.advance(Fixtures.FIRST_READING_MS)
+
+    expect(await percentOf(ui)).toEqual(['80%'])
+
+    await ui.unmount()
+  })
+
+  test('a session resumed at launch draws the context it restored', async ($, on) => {
     Fixtures.startsSession(on, 50_000)
 
     await $.classic.SessionStart({ source: 'resume' })
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
-    expect(await ui.find({ type: 'Text', text: /^25%$/ })).toBeDefined()
+    expect(await percentOf(ui)).toEqual(['25%'])
+
+    await ui.unmount()
+  })
+
+  test('a branch takes a reading', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    world.usage = Fixtures.usageOf(120_000)
+    await $.classic.SessionStart({ source: 'fork' })
+
+    expect(await percentOf(ui)).toEqual(['60%'])
 
     await ui.unmount()
   })
@@ -324,19 +464,19 @@ describe('register', () => {
 
       expect(await percentOf(ui)).toEqual(['80%'])
 
-      world.usage = Fixtures.usageOf(undefined, { estimate: 15_900 })
       await $.session.compact(Fixtures.compactOf(trigger))
+      world.usage = Fixtures.usageOf(undefined, { estimate: 15_900 })
 
       expect(
         await percentOf(ui),
         'the engine lands it only after the hook returns',
       ).toEqual(['80%'])
 
-      await world.clock.advance(FIRST_SETTLE_MS)
+      await world.clock.advance(Fixtures.FIRST_READING_MS)
 
       expect(await percentOf(ui), trigger).toEqual(['~8%'])
 
-      await world.clock.advance(ALL_SETTLED_MS)
+      await world.clock.advance(Fixtures.SETTLED_MS)
     }
 
     await ui.unmount()
@@ -347,7 +487,7 @@ describe('register', () => {
 
     await $.session.start(Fixtures.SESSION)
 
-    const asked = world.asked.length
+    const readings = readingsOf(world)
 
     await $.session.compact(Fixtures.compactOf('precompute'))
     await $.session.compact(Fixtures.compactOf('auto', 'agent-1'))
@@ -355,9 +495,40 @@ describe('register', () => {
     world.compaction = { skip: 'held by a PreCompact hook' }
     await $.session.compact(Fixtures.compactOf('manual'))
 
-    await world.clock.advance(ALL_SETTLED_MS)
+    await world.clock.advance(Fixtures.SETTLED_MS)
 
-    expect(world.asked.length, 'no reading was taken').toBe(asked)
+    expect(readingsOf(world), 'no reading was taken').toBe(readings)
+  })
+
+  test("a reading that resolves late never overwrites a newer request's figure", async ($, on) => {
+    const world = Fixtures.startsSession(on, 160_000)
+
+    Fixtures.answersSteps(on, () => 30_000)
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    world.lag = 20
+    await $.session.compact(Fixtures.compactOf('auto'))
+    world.usage = Fixtures.usageOf(undefined, { estimate: 15_900 })
+
+    await world.clock.set(1_605)
+
+    expect(await percentOf(ui)).toEqual(['~8%'])
+
+    await Fixtures.readToEnd($.turn.step(Fixtures.stepOf()))
+
+    expect(await percentOf(ui)).toEqual(['15%'])
+
+    await world.clock.set(1_625)
+
+    expect(
+      await percentOf(ui),
+      'the reading made at 1.6 s answered with the figures from before the request',
+    ).toEqual(['15%'])
+
+    await ui.unmount()
   })
 
   test('a model switch is read once the engine has moved to the new window', async ($, on) => {
@@ -367,9 +538,15 @@ describe('register', () => {
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
-    world.usage = Fixtures.usageOf(84_100, { window: 1_000_000 })
     await $.classic.PostModelSwitch(Fixtures.MODEL_SWITCH)
-    await world.clock.advance(FIRST_SETTLE_MS)
+    world.usage = Fixtures.usageOf(84_100, { window: 1_000_000 })
+
+    expect(
+      await percentOf(ui),
+      'the engine moves to the new model after the hook',
+    ).toEqual(['42%'])
+
+    await world.clock.advance(Fixtures.FIRST_READING_MS)
 
     expect(await percentOf(ui)).toEqual(['8%'])
 
@@ -380,19 +557,26 @@ describe('register', () => {
     await ui.unmount()
   })
 
-  test('turning auto-compact off in /config is read once it lands', async ($, on) => {
+  test('turning auto-compact off in /config is read once it lands, even after the first reading', async ($, on) => {
     const world = Fixtures.startsSession(on, 84_100)
 
     await $.session.start(Fixtures.SESSION)
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
-    world.usage = Fixtures.usageOf(84_100, { isAutoCompact: false })
     await $.config.set(Fixtures.AUTO_COMPACT_OFF)
-    await world.clock.advance(FIRST_SETTLE_MS)
+    await world.clock.advance(Fixtures.FIRST_READING_MS)
 
     expect(
-      await ui.find({ type: 'Text', text: /^112\.9k before the limit$/ }),
+      await ui.find({ type: 'Text', text: /^82\.9k until auto-compact$/ }),
+      'the setting had not landed by the first reading',
+    ).toBeDefined()
+
+    world.usage = Fixtures.usageOf(84_100, { isAutoCompact: false })
+    await world.clock.set(Fixtures.SECOND_READING_MS)
+
+    expect(
+      await ui.find({ type: 'Text', text: /^92\.9k before the limit$/ }),
     ).toBeDefined()
 
     await ui.unmount()
@@ -405,20 +589,112 @@ describe('register', () => {
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
-    world.usage = Fixtures.usageOf(84_100, { limit: 150_000 })
-
     expect(
       await $.command.run(Fixtures.commandOf('autocompact', '150000')),
       "the command is the engine's",
     ).toEqual({ text: 'run by Claude Code' })
 
-    await world.clock.advance(FIRST_SETTLE_MS)
+    world.usage = Fixtures.usageOf(84_100, { limit: 150_000 })
+
+    expect(Fixtures.textOf(await ui.drawn())).toBe(CALM_LINE)
+
+    await world.clock.advance(Fixtures.FIRST_READING_MS)
 
     expect(Fixtures.textOf(await ui.drawn())).toBe(
       '▰'.repeat(8) +
         '▱'.repeat(4) +
         '▰'.repeat(8) +
         '  42% · 84.1k/200k tokens · 32.9k until auto-compact',
+    )
+
+    await ui.unmount()
+  })
+
+  test('a rewound conversation, which no event announces, is read within two seconds', async ($, on) => {
+    const world = Fixtures.startsSession(on, 160_000)
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    world.usage = Fixtures.usageOf(undefined, { estimate: 51_800 })
+
+    await world.clock.advance(Fixtures.RECHECK_MS - 1)
+
+    expect(await percentOf(ui), 'no event announced it').toEqual(['80%'])
+
+    await world.clock.advance(1)
+
+    expect(await percentOf(ui)).toEqual(['~26%'])
+
+    await ui.unmount()
+  })
+
+  test("the live check settles a request's own count onto the engine's figure", async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    Fixtures.answersSteps(on, () => 120_000)
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    await Fixtures.readToEnd($.turn.step(Fixtures.stepOf()))
+
+    expect(await percentOf(ui)).toEqual(['60%'])
+
+    world.usage = Fixtures.usageOf(100_000)
+    await world.clock.advance(Fixtures.RECHECK_MS)
+
+    expect(await percentOf(ui)).toEqual(['50%'])
+
+    await ui.unmount()
+  })
+
+  test('the live check takes no reading while the figures agree, and one start runs one check', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    await $.session.start(Fixtures.SESSION)
+    await $.session.start(Fixtures.SESSION)
+
+    const asked = world.asked.length
+    const readings = readingsOf(world)
+
+    await world.clock.advance(Fixtures.RECHECK_MS * 3)
+
+    expect(readingsOf(world), 'no reading was taken').toBe(readings)
+    expect(world.asked.length - asked, 'one plain read a check').toBe(3)
+  })
+
+  test('where compaction waits for the API to refuse a full window, the band counts down to its end', async ($, on) => {
+    const world = Fixtures.startsSession(on, 160_000)
+
+    world.usage = Fixtures.usageOf(160_000, { isEnforced: false })
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(Fixtures.textOf(await ui.drawn())).toBe(
+      '▰'.repeat(16) +
+        '▱'.repeat(4) +
+        '  80% · 160k/200k tokens · 40k until auto-compact',
+    )
+
+    await ui.unmount()
+  })
+
+  test('with auto-compact off the band counts down to where Claude Code stops sending requests', async ($, on) => {
+    const world = Fixtures.startsSession(on, 180_000)
+
+    world.usage = Fixtures.usageOf(180_000, { isAutoCompact: false })
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(Fixtures.textOf(await ui.drawn())).toBe(
+      '▰'.repeat(20) + '  90% · 180k/200k tokens · run /compact to continue',
     )
 
     await ui.unmount()
@@ -457,6 +733,21 @@ describe('register', () => {
     await ui.unmount()
   })
 
+  test('a breakdown the engine will not count leaves the plain figures and the usual reserve', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    world.refusals.breakdown = 'busy'
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(Fixtures.textOf(await ui.drawn())).toBe(CALM_LINE)
+    expect(world.logs, 'the plain figures answered').toEqual([])
+
+    await ui.unmount()
+  })
+
   test('a reading the engine cannot give leaves the band to the engine and says why in the debug log', async ($, on) => {
     const world = Fixtures.startsSession(on, 84_100)
 
@@ -476,10 +767,26 @@ describe('register', () => {
     await ui.unmount()
   })
 
+  test('a reading that fails later keeps the last one', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    world.usage = null
+    await $.session.measure(Fixtures.measureOf(134_400))
+
+    expect(Fixtures.textOf(await ui.drawn())).toBe(CALM_LINE)
+    expect(world.logs.length, 'the failure was logged').toBe(1)
+
+    await ui.unmount()
+  })
+
   test('a command the engine will not register is said in the debug log, and the band still draws', async ($, on) => {
     const world = Fixtures.startsSession(on, 84_100)
 
-    world.refusal = '32 commands are registered already'
+    world.refusals.register = '32 commands are registered already'
 
     await $.session.start(Fixtures.SESSION)
 

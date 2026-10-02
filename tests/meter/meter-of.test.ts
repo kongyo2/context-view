@@ -1,15 +1,10 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Meter from '../../hooks/meter'
 import Fixtures from '../fixtures'
 
-/**
- * Cells of one kind, `count` of them.
- *
- * @param cell the kind
- * @param count how many
- * @returns the cells
- */
+tier('user')
+
 const cells = (cell: Meter.Cell, count: number): Meter.Cell[] =>
   Array.from({ length: count }, () => cell)
 
@@ -22,6 +17,14 @@ describe('meter-of', () => {
 
     expect(
       Meter.meterOf(Fixtures.MANUAL_WINDOW, Fixtures.fillAt(0), 20),
+    ).toEqual([...cells('free', 18), ...cells('reserve', 2)])
+
+    expect(
+      Meter.meterOf(
+        { ...Fixtures.WINDOW, buffer: 3_000 },
+        Fixtures.fillAt(0),
+        20,
+      ),
     ).toEqual([...cells('free', 19), 'reserve'])
 
     expect(

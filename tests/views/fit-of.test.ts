@@ -1,12 +1,10 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Views from '../../hooks/views'
 import Fixtures from '../fixtures'
 
-/**
- * The text at 84.1k of a 200k window: `42%` (3 cells), `84.1k/200k tokens`
- * (17) and `82.9k until auto-compact` (24), 50 cells with two separators.
- */
+tier('user')
+
 const SEGMENTS = Views.segmentsOf(Fixtures.WINDOW, Fixtures.fillAt(84_100))
 
 describe('fit-of', () => {

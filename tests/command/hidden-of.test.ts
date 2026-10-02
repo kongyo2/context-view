@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Command from '../../hooks/command'
+
+tier('user')
 
 describe('hidden-of', () => {
   test('nothing after the name flips the band', () => {

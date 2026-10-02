@@ -6,16 +6,6 @@ import { formatTokens } from './format-tokens.js'
 import { headroomTextOf } from './headroom-text-of.js'
 import type { Segment } from './segment.js'
 
-/**
- * The band's text, left to right: the percentage in the level's colour, the
- * tokens over the window dim, and the headroom before compaction, dim while
- * there is room and in the level's colour once there is not. Each figure
- * from an estimate is marked as one.
- *
- * @param window the window measured against, its reserve and its mode
- * @param fill the context's tokens and percentage
- * @returns the segments
- */
 export function segmentsOf(
   window: ContextViewWindow,
   fill: ContextViewFill,

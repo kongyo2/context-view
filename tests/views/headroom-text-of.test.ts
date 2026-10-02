@@ -1,7 +1,9 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Views from '../../hooks/views'
 import Fixtures from '../fixtures'
+
+tier('user')
 
 describe('headroom-text-of', () => {
   test('auto-compact on: the tokens left until it, then that it runs next', () => {
@@ -14,12 +16,13 @@ describe('headroom-text-of', () => {
     expect(textAt(170_000)).toBe('auto-compact next')
   })
 
-  test('auto-compact off: the tokens left before the limit, then the ask to run /compact', () => {
+  test('auto-compact off: the tokens left before Claude Code stops sending requests, then the ask to run /compact', () => {
     const textAt = (tokens: number) =>
       Views.headroomTextOf(Fixtures.MANUAL_WINDOW, Fixtures.fillAt(tokens))
 
-    expect(textAt(84_100)).toBe('112.9k before the limit')
-    expect(textAt(197_000)).toBe('run /compact to continue')
+    expect(textAt(84_100)).toBe('92.9k before the limit')
+    expect(textAt(176_500)).toBe('500 before the limit')
+    expect(textAt(177_000)).toBe('run /compact to continue')
   })
 
   test('a count from an estimate is marked as one; the words without a count are not', () => {
@@ -28,7 +31,7 @@ describe('headroom-text-of', () => {
 
     expect(textAt(Fixtures.WINDOW, 84_100)).toBe('~82.9k until auto-compact')
     expect(textAt(Fixtures.MANUAL_WINDOW, 84_100)).toBe(
-      '~112.9k before the limit',
+      '~92.9k before the limit',
     )
     expect(textAt(Fixtures.WINDOW, 170_000)).toBe('auto-compact next')
     expect(textAt(Fixtures.MANUAL_WINDOW, 197_000)).toBe(

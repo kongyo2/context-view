@@ -17,7 +17,10 @@ window itself moves: after `/clear`, a resume or a branch, a compaction
 picker, a fallback), and a change to auto-compact (`/autocompact`, or the
 `/config` toggle). The engine can land those after the hook that sees them
 has returned, so the row reads them a tenth of a second later, and twice
-more after that for a busy machine.
+more after that for a busy machine. Every two seconds it also compares the
+engine's live figures with its reading, without asking for a breakdown, so
+a change no event announces, such as a rewound conversation, shows within
+two seconds.
 
 Until a response of the window has landed (a new session, and the window
 after `/clear` or a compaction), the row shows the engine's local
@@ -36,14 +39,24 @@ The meter and the percentage are drawn in the blue Claude Code fills its
 usage meters with, the tokens and the headroom dim. From six tenths of the
 way to the auto-compact threshold they turn to Claude Code's warning
 colour, the headroom with them, and within the last 20k tokens before it,
-where Claude Code's own line starts saying the context is low, to its
-error colour; past the threshold the headroom reads `auto-compact next`.
-With auto-compact off the reserve is the small buffer a manual `/compact`
-needs, and the headroom counts down to the window's limit instead
-(`112.9k before the limit`, then `run /compact to continue`). Every colour
-is a theme key (`permission`, `warning`, `error`, and the dim text's), so
-the row follows the dark, light, daltonized and ANSI themes; nothing is
-bold.
+where Claude Code's own line under the prompt appears, to its error
+colour; past the threshold the headroom reads `auto-compact next`. The
+headroom counts the last reply too, which the next request carries, as
+Claude Code counts it toward its threshold. Every colour is a theme key
+(`permission`, `warning`, `error`, and the dim text's), so the row follows
+the dark, light, daltonized and ANSI themes; nothing is bold.
+
+The reserve is the one `/context` draws. Where Claude Code compacts only
+once the API refuses a full window, as it runs a 200k model with no
+compaction window set, `/context` keeps none and neither does the row: the
+headroom counts down to the window's end.
+
+    ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱  80% · 160k/200k tokens · 40k until auto-compact
+
+With auto-compact off, the reserve is the room Claude Code keeps for a
+reply and for a manual `/compact`, and the headroom counts down to where it
+stops sending requests (`92.9k before the limit`), then asks for
+`run /compact to continue` as Claude Code's own line does.
 
 The meter spans the model's whole window, as the percentage and the tokens
 do. Where a setting caps the window compaction measures against below the
@@ -65,9 +78,10 @@ or while the engine has neither a figure nor an estimate.
 
 Counts print as Claude Code prints them (`84.1k`, `200k`, `1m`). The
 percentage is the status line's: the last response's input tokens over
-the model's window. Claude Code's own `context used` line counts against
-the window less the room it keeps for a reply, so it reads higher near the
-limit (`89% context used` where the row reads 80%). The threshold and the
+the model's window. Claude Code's own `context used` line, which it shows
+instead of a countdown where compaction waits for the API, counts against
+the window less the room it keeps for a reply, so it reads higher
+(`89% context used` where the row reads 80%). The threshold and the
 reserve come from the breakdown `/context` draws, estimated locally with
 no request sent; where no breakdown answers, the 33k Claude Code usually
 keeps stands in. A reading the engine cannot give, a command it will not
@@ -83,8 +97,8 @@ each write draws the row again.
 
 | event | what the hook does |
 | --- | --- |
-| `session.start` | Registers `/context-view`; once the session is up, reads which marks the terminal draws the meter with, copies the person's choice from the store, and takes the first reading. |
-| `classic.SessionStart` of `clear`, `resume`, `fork` | Once the engine has run it: copies the choice again and takes a reading, as those reset `$.state`. |
+| `session.start` | Registers `/context-view`; once the session is up, reads which marks the terminal draws the meter with, copies the person's choice from the store, takes the first reading, and starts the check of the engine's live figures every two seconds. |
+| `classic.SessionStart` of `clear`, `resume`, `fork` | Once the engine has run it: copies the choice again and takes a reading, as those reset `$.state`, and reads again once a resumed session has been swapped in. |
 | `session.measure` | After a main-thread turn whose context moved: takes a reading, the fill from the figures the engine pushed. |
 | `turn.step` | After each request of the main loop: the input tokens it was answered over are the fill at that moment. |
 | `session.compact` | After a compaction of the main window that stands (not one computed ahead of time, a subagent's, or one vetoed): reads the window once the engine has landed it. |
@@ -97,7 +111,7 @@ each write draws the row again.
 ## What it calls on `$`
 
 `clock.after` (the readings after a change the engine lands late),
-`command.register`, `env.get` (`TERM` and `TERM_PROGRAM`, once a load, to
+`clock.every` (the check of the live figures), `command.register`, `env.get` (`TERM` and `TERM_PROGRAM`, once a load, to
 tell Ghostty), `session.usage` (with `breakdown: 'summary'`, estimated
 locally; the plain figures where that fails), `state.get`, `state.set`,
 `store.get`, `store.set`, `ui.log` (to the debug log alone) and
@@ -130,10 +144,11 @@ This repository is its own marketplace:
 Each file under `tests/` covers the file of its name under `hooks/`.
 `tests/register.test.ts` drives the module through a session's events (the
 start, the estimate before the first response, measurements, a running
-turn's requests, `/clear`, a resume, compactions of each kind, a model
-switch, `/config` and `/autocompact`, `/context-view` and its words, a
-survey, a failed reading, a refused command, Ghostty) on the terminal and
-the desktop, and `tests/views/band.test.ts` reads the drawn row at each
+turn's requests and their replies, `/clear`, a resume, a branch,
+compactions of each kind, a model switch, `/config` and `/autocompact`, a
+rewind, a reading that resolves late, `/context-view` and its words, a
+survey, failed readings, refused calls, Ghostty) on the terminal and the
+desktop, and `tests/views/band.test.ts` reads the drawn row at each
 width and level, as an estimate, and over a capped window. `claude plugin
 validate .` reads this folder as the marketplace it also is; point it at a
 copy without `.claude-plugin/marketplace.json` for the module's own report.

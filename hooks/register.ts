@@ -4,6 +4,7 @@ import type {
   On,
   SessionContextUsage,
   SessionUsage,
+  Timer,
   TurnUsage,
 } from 'claude-code'
 
@@ -15,43 +16,23 @@ import Names from './names'
 import Readings from './readings'
 import Views from './views'
 
-/**
- * The window measured against, held by the host so it survives a hot reload
- * of this file; the band draws again whenever it is written.
- */
 const contextWindow = atom(
   { plugin: 'context-view', key: 'window' } as const,
   null,
 )
 
-/**
- * How full the window is: the last response's figure, or the engine's
- * estimate until a response of this window has landed; null with neither.
- */
 const contextFill = atom({ plugin: 'context-view', key: 'fill' } as const, null)
 
-/**
- * Whether `/context-view` has hidden the band; copied from the store at the
- * session's start and again after `/clear`, `/resume` and `/branch`.
- */
 const isHidden = atom(
   { plugin: 'context-view', key: 'isHidden' } as const,
   false,
 )
 
-/**
- * Registers the context view: `/context-view`, the readings the band takes
- * whenever the window moves (each main-thread request and turn, a
- * compaction, a model switch, a change to auto-compact), and the band
- * itself above the prompt.
- *
- * Whatever a hook does after `next(e)` never fails it: the engine's own
- * work has run by then, and a reading that fails goes to the debug log.
- *
- * @param on the engine's registrar
- */
+let latest = 0
+
 export function register(on: On): void {
   let glyphs: Glyphs.GlyphSet = Glyphs.PILL_GLYPHS
+  let rechecking: Timer | undefined
 
   on('session.start', async ($, e, next) => {
     try {
@@ -71,6 +52,9 @@ export function register(on: On): void {
     await loadHidden($)
     await measure($)
 
+    rechecking?.cancel()
+    rechecking = recheckEvery($)
+
     return result
   })
 
@@ -82,6 +66,7 @@ export function register(on: On): void {
 
       await loadHidden($)
       await measure($)
+      settle($)
 
       return result
     },
@@ -188,13 +173,6 @@ export function register(on: On): void {
   })
 }
 
-/**
- * The marks this terminal draws the meter with, as Claude Code picks its
- * own: the pills, or the blocks in Ghostty.
- *
- * @param $ the engine interface
- * @returns the marks
- */
 async function glyphsFor($: EngineInterface): Promise<Glyphs.GlyphSet> {
   const term = await $.env.get('TERM').catch(() => undefined)
   const program = await $.env.get('TERM_PROGRAM').catch(() => undefined)
@@ -202,12 +180,6 @@ async function glyphsFor($: EngineInterface): Promise<Glyphs.GlyphSet> {
   return Glyphs.glyphsOf(term, program)
 }
 
-/**
- * Copies the person's choice from the store into the session's state:
- * hidden when `/context-view` hid the band in an earlier session.
- *
- * @param $ the engine interface
- */
 async function loadHidden($: EngineInterface): Promise<void> {
   const stored = await $.store
     .get(Names.STORE_HIDDEN_KEY)
@@ -216,43 +188,35 @@ async function loadHidden($: EngineInterface): Promise<void> {
   await update($, isHidden, () => stored === true).catch(() => undefined)
 }
 
-/**
- * Takes a reading: the window and its compaction reserve from the breakdown
- * (estimated locally, no request sent; the plain figures where that fails),
- * and the fill from the live figure the engine pushed, else from the one it
- * answers, which stands in with its estimate until a response has landed.
- *
- * Never fails: a reading the engine cannot give goes to the debug log and
- * the band keeps the last one.
- *
- * @param $ the engine interface
- * @param context the context a measurement carried, when one did
- */
 async function measure(
   $: EngineInterface,
   context?: SessionContextUsage,
 ): Promise<void> {
+  latest += 1
+
+  const ticket = latest
+
   try {
     const usage = await usageOf($)
     const measured = Readings.windowOf(usage.context)
     const filled = Readings.fillOf(
-      context?.tokens === undefined ? usage.context : context,
+      context?.tokens === undefined
+        ? usage.context
+        : { ...context, breakdown: usage.context.breakdown },
     )
 
-    await update($, contextWindow, () => measured)
-    await update($, contextFill, () => filled)
+    if (ticket === latest) {
+      await update($, contextWindow, () => measured)
+    }
+
+    if (ticket === latest) {
+      await update($, contextFill, () => filled)
+    }
   } catch (error) {
     $.ui.log(Names.readingFailedTextOf(messageOf(error)), { to: 'debug' })
   }
 }
 
-/**
- * What the engine answers for the session's usage: with the breakdown's
- * summary when it can give one, else the plain figures.
- *
- * @param $ the engine interface
- * @returns the usage; rejects when neither answers
- */
 async function usageOf($: EngineInterface): Promise<SessionUsage> {
   try {
     return await $.session.usage({ breakdown: 'summary' })
@@ -261,17 +225,6 @@ async function usageOf($: EngineInterface): Promise<SessionUsage> {
   }
 }
 
-/**
- * Follows one request of the main loop's turn: the input tokens it was
- * answered over are the window's fill at that moment, so the band moves
- * while a long turn runs instead of waiting for its end. A window not yet
- * measured is measured first.
- *
- * Never fails: a reading the engine cannot give goes to the debug log.
- *
- * @param $ the engine interface
- * @param usage what the API reported for the request
- */
 async function follow($: EngineInterface, usage: TurnUsage): Promise<void> {
   try {
     if (!(await read($, contextWindow))) {
@@ -284,25 +237,22 @@ async function follow($: EngineInterface, usage: TurnUsage): Promise<void> {
       return
     }
 
+    latest += 1
+
     const tokens = Readings.tokensOf(usage)
     const percent = Readings.percentOf(tokens, measured.window)
 
-    await update($, contextFill, () => ({ tokens, percent, isEstimate: false }))
+    await update($, contextFill, () => ({
+      tokens,
+      percent,
+      isEstimate: false,
+      output: usage.output_tokens,
+    }))
   } catch (error) {
     $.ui.log(Names.readingFailedTextOf(messageOf(error)), { to: 'debug' })
   }
 }
 
-/**
- * Takes readings shortly after a change the engine lands only once the hook
- * that saw it has returned, as a compaction's conversation, a setting's new
- * value and a new model's window are: one at each settle delay, so the band
- * follows within a tenth of a second and still catches a slow landing.
- *
- * Never fails: a timer the engine refuses goes to the debug log.
- *
- * @param $ the engine interface
- */
 function settle($: EngineInterface): void {
   try {
     for (const ms of Limits.SETTLE_DELAYS_MS) {
@@ -310,5 +260,29 @@ function settle($: EngineInterface): void {
     }
   } catch (error) {
     $.ui.log(Names.readingFailedTextOf(messageOf(error)), { to: 'debug' })
+  }
+}
+
+function recheckEvery($: EngineInterface): Timer | undefined {
+  try {
+    return $.clock.every(Limits.RECHECK_MS, () => void recheck($))
+  } catch (error) {
+    $.ui.log(Names.readingFailedTextOf(messageOf(error)), { to: 'debug' })
+
+    return undefined
+  }
+}
+
+async function recheck($: EngineInterface): Promise<void> {
+  try {
+    const { context } = await $.session.usage()
+    const measured = await read($, contextWindow)
+    const filled = await read($, contextFill)
+
+    if (Readings.isOutdated(context, measured, filled)) {
+      await measure($)
+    }
+  } catch {
+    return
   }
 }

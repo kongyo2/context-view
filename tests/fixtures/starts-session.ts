@@ -6,27 +6,12 @@ import { SUMMARY } from './summary.js'
 import { usageOf } from './usage-of.js'
 import type { World } from './world.js'
 
-/**
- * The engine's own drawing of the band, as it answers a pass.
- */
 const ENGINE_DRAWING: RenderElement = {
   type: 'Text',
   props: {},
   children: [ENGINE_TEXT],
 }
 
-/**
- * Answers what every session asks beneath the plugin: its start, the clear,
- * resume and model-switch events, each measurement, the command it
- * registers, the engine's own compaction, settings and commands, the
- * environment, the store, the usage, the debug log, the clock, and the
- * engine's own band where the plugin passes.
- *
- * @param on the test's `on`
- * @param tokens the context's tokens; left out before the first response
- * @param variables the environment the plugin reads
- * @returns the world, for a test to read and move
- */
 export function startsSession(
   on: On,
   tokens?: number,
@@ -35,10 +20,11 @@ export function startsSession(
   const world: World = {
     store: new Map(),
     commands: [],
-    refusal: null,
     usage: usageOf(tokens),
+    lag: 0,
     asked: [],
     compaction: { messages: [SUMMARY] },
+    refusals: {},
     logs: [],
     clock: mock.clock(on),
   }
@@ -54,8 +40,8 @@ export function startsSession(
   on('command.run', () => ({ text: 'run by Claude Code' }))
 
   on('command.register', ($, e) => {
-    if (world.refusal !== null) {
-      return { deny: world.refusal }
+    if (world.refusals.register !== undefined) {
+      return { deny: world.refusals.register }
     }
 
     world.commands.push(e)
@@ -66,15 +52,31 @@ export function startsSession(
   on('store.get', ($, e) => ({ value: world.store.get(e.key) }))
 
   on('store.set', ($, e) => {
+    if (world.refusals.save !== undefined) {
+      return { deny: world.refusals.save }
+    }
+
     world.store.set(e.key, e.value)
 
     return { value: undefined }
   })
 
-  on('session.usage', ($, e) => {
+  on('session.usage', async ($, e) => {
     world.asked.push(e.breakdown)
 
-    return world.usage ? { value: world.usage } : { deny: 'no session bound' }
+    const answer = world.usage
+
+    if (e.breakdown !== undefined) {
+      if (world.refusals.breakdown !== undefined) {
+        return { deny: world.refusals.breakdown }
+      }
+
+      if (world.lag > 0) {
+        await world.clock.sleep(world.lag)
+      }
+    }
+
+    return answer ? { value: answer } : { deny: 'no session bound' }
   })
 
   on('ui.log', ($, e) => {

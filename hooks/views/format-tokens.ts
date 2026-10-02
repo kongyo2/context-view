@@ -1,11 +1,3 @@
-/**
- * A token count as Claude Code prints one: whole under a thousand, else to
- * one decimal in thousands or millions, lower case, with a trailing `.0`
- * dropped (`950`, `84.1k`, `200k`, `1m`).
- *
- * @param count the tokens
- * @returns the count, compact
- */
 export function formatTokens(count: number): string {
   const tokens = Math.max(0, Math.round(count))
 

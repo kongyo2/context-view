@@ -4,16 +4,6 @@ import Levels from '../levels'
 import Names from '../names'
 import { formatTokens } from './format-tokens.js'
 
-/**
- * The headroom in words: the tokens left before auto-compact, or that it
- * runs before the next request once none are; where auto-compact is off,
- * the tokens left before the limit, or the ask to run /compact. A count
- * from an estimate is marked as one.
- *
- * @param window the window measured against, its reserve and its mode
- * @param fill the context's tokens, and whether they are an estimate
- * @returns the text
- */
 export function headroomTextOf(
   window: ContextViewWindow,
   fill: ContextViewFill,

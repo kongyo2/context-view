@@ -1,7 +1,9 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Levels from '../../hooks/levels'
 import Fixtures from '../fixtures'
+
+tier('user')
 
 describe('level-of', () => {
   test('calm while there is room', () => {
@@ -20,12 +22,22 @@ describe('level-of', () => {
     }
   })
 
-  test("error within the stretch where Claude Code's own line says the context is low", () => {
+  test("error within the last 20k before the threshold, where Claude Code's own line appears", () => {
     for (const tokens of [147_000, 167_000, 199_000]) {
       expect(Levels.levelOf(Fixtures.WINDOW, Fixtures.fillAt(tokens))).toBe(
         'error',
       )
     }
+  })
+
+  test('the last reply counts toward both', () => {
+    const replied = (tokens: number) => ({
+      ...Fixtures.fillAt(tokens),
+      output: 1_000,
+    })
+
+    expect(Levels.levelOf(Fixtures.WINDOW, replied(99_200))).toBe('warning')
+    expect(Levels.levelOf(Fixtures.WINDOW, replied(146_000))).toBe('error')
   })
 
   test('a capped compaction window moves the levels down with it', () => {
@@ -34,6 +46,18 @@ describe('level-of', () => {
     expect(Levels.levelOf(capped, Fixtures.fillAt(40_000))).toBe('calm')
     expect(Levels.levelOf(capped, Fixtures.fillAt(40_200))).toBe('warning')
     expect(Levels.levelOf(capped, Fixtures.fillAt(47_000))).toBe('error')
+  })
+
+  test("without a reserve the levels run to the window's end", () => {
+    expect(
+      Levels.levelOf(Fixtures.REACTIVE_WINDOW, Fixtures.fillAt(119_999)),
+    ).toBe('calm')
+    expect(
+      Levels.levelOf(Fixtures.REACTIVE_WINDOW, Fixtures.fillAt(160_000)),
+    ).toBe('warning')
+    expect(
+      Levels.levelOf(Fixtures.REACTIVE_WINDOW, Fixtures.fillAt(180_000)),
+    ).toBe('error')
   })
 
   test("each level draws in one of Claude Code's own theme keys", () => {

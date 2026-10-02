@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Readings from '../../hooks/readings'
+
+tier('user')
 
 describe('percent-of', () => {
   test('whole, as the status line rounds it', () => {

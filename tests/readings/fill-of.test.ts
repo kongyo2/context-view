@@ -1,13 +1,15 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Readings from '../../hooks/readings'
 import Fixtures from '../fixtures'
+
+tier('user')
 
 describe('fill-of', () => {
   test("the engine's tokens and percentage", () => {
     expect(
       Readings.fillOf({ window: 200_000, tokens: 84_100, percent: 42 }),
-    ).toEqual({ tokens: 84_100, percent: 42, isEstimate: false })
+    ).toEqual({ tokens: 84_100, percent: 42, isEstimate: false, output: 0 })
   })
 
   test('a percentage the engine left out is figured from the tokens', () => {
@@ -15,7 +17,31 @@ describe('fill-of', () => {
       tokens: 84_100,
       percent: 42,
       isEstimate: false,
+      output: 0,
     })
+  })
+
+  test("what the last response wrote, from the breakdown's record of it", () => {
+    const { context } = Fixtures.usageOf(84_100, { output: 1_200 })
+
+    expect(Readings.fillOf(context)?.output).toBe(1_200)
+  })
+
+  test("a live figure wins over the breakdown's total", () => {
+    const { context } = Fixtures.usageOf(84_100)
+
+    expect(context.breakdown).toBeDefined()
+
+    if (!context.breakdown) {
+      return
+    }
+
+    expect(
+      Readings.fillOf({
+        ...context,
+        breakdown: { ...context.breakdown, totalTokens: 90_000 },
+      }),
+    ).toEqual({ tokens: 84_100, percent: 42, isEstimate: false, output: 0 })
   })
 
   test("before the window's first response, the breakdown's estimate, marked as one", () => {
@@ -26,12 +52,6 @@ describe('fill-of', () => {
       percent: 8,
       isEstimate: true,
     })
-  })
-
-  test("a live figure wins over the breakdown's total", () => {
-    const { context } = Fixtures.usageOf(84_100)
-
-    expect(Readings.fillOf(context)?.isEstimate).toBe(false)
   })
 
   test('nothing with neither a figure nor an estimate', () => {

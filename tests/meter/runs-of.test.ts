@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Meter from '../../hooks/meter'
+
+tier('user')
 
 describe('runs-of', () => {
   test('cells of one kind side by side make one run', () => {

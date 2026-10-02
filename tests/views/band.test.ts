@@ -1,23 +1,17 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Glyphs from '../../hooks/glyphs'
 import Fixtures from '../fixtures'
 
-/**
- * The surfaces that draw the band above the prompt.
- */
-const SURFACES = ['terminal', 'desktop'] as const
+tier('user')
 
-/**
- * The band's text at 84.1k of a 200k window, auto-compact on.
- */
 const TEXT = '  42% · 84.1k/200k tokens · 82.9k until auto-compact'
 
 describe('band', () => {
   test('a wide band draws a 20-cell meter, then the percentage, the tokens and the headroom', async ($, on) => {
     Fixtures.drawsBand(on, Fixtures.WINDOW, Fixtures.fillAt(84_100))
 
-    for (const surface of SURFACES) {
+    for (const surface of Fixtures.SURFACES) {
       const ui = await $.ui.mount({ ...Fixtures.bandAt(120), surface })
 
       expect(Fixtures.textOf(await ui.drawn())).toBe(
@@ -214,16 +208,30 @@ describe('band', () => {
     await ui.unmount()
   })
 
-  test('with auto-compact off the reserve is one cell and the headroom counts down to the limit', async ($, on) => {
+  test('with auto-compact off the reserve is the reply room and the compact buffer, and the headroom counts down to where requests stop', async ($, on) => {
     Fixtures.drawsBand(on, Fixtures.MANUAL_WINDOW, Fixtures.fillAt(84_100))
 
     const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
 
     expect(Fixtures.textOf(await ui.drawn())).toBe(
       '▰'.repeat(8) +
-        '▱'.repeat(11) +
-        '▰' +
-        '  42% · 84.1k/200k tokens · 112.9k before the limit',
+        '▱'.repeat(10) +
+        '▰'.repeat(2) +
+        '  42% · 84.1k/200k tokens · 92.9k before the limit',
+    )
+
+    await ui.unmount()
+  })
+
+  test('where compaction waits for the API to refuse a full window, no reserve is drawn', async ($, on) => {
+    Fixtures.drawsBand(on, Fixtures.REACTIVE_WINDOW, Fixtures.fillAt(84_100))
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    expect(Fixtures.textOf(await ui.drawn())).toBe(
+      '▰'.repeat(8) +
+        '▱'.repeat(12) +
+        '  42% · 84.1k/200k tokens · 115.9k until auto-compact',
     )
 
     await ui.unmount()

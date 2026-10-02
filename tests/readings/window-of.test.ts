@@ -1,16 +1,25 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Readings from '../../hooks/readings'
 import Fixtures from '../fixtures'
 
+tier('user')
+
 describe('window-of', () => {
-  test("the reserve is the window above the engine's auto-compact threshold", () => {
+  test("with auto-compact on, the reserve is the breakdown's autocompact buffer, past the threshold", () => {
     expect(Readings.windowOf(Fixtures.usageOf(84_100).context)).toEqual(
       Fixtures.WINDOW,
     )
   })
 
-  test("with auto-compact off, the buffer rows' tokens are the reserve", () => {
+  test('where compaction waits for the API to refuse a full window, there is no reserve, whatever the threshold says', () => {
+    const { context } = Fixtures.usageOf(84_100, { isEnforced: false })
+
+    expect(context.breakdown?.autoCompactThreshold).toBe(167_000)
+    expect(Readings.windowOf(context)).toEqual(Fixtures.REACTIVE_WINDOW)
+  })
+
+  test("with auto-compact off, the reserve is the compact buffer and Claude Code's room for a reply", () => {
     expect(
       Readings.windowOf(
         Fixtures.usageOf(84_100, { isAutoCompact: false }).context,
@@ -19,28 +28,13 @@ describe('window-of', () => {
   })
 
   test('a capped compaction window is the limit', () => {
-    const { context } = Fixtures.usageOf(84_100)
-    const breakdown = context.breakdown
-
-    expect(breakdown).toBeDefined()
-
-    if (!breakdown) {
-      return
-    }
-
     expect(
-      Readings.windowOf({
-        ...context,
-        breakdown: {
-          ...breakdown,
-          rawMaxTokens: 100_000,
-          maxTokens: 100_000,
-          autoCompactThreshold: 67_000,
-        },
-      }),
+      Readings.windowOf(
+        Fixtures.usageOf(84_100, { window: 1_000_000, limit: 150_000 }).context,
+      ),
     ).toEqual({
-      window: 200_000,
-      limit: 100_000,
+      window: 1_000_000,
+      limit: 150_000,
       buffer: 33_000,
       isAutoCompact: true,
     })

@@ -2,21 +2,6 @@ import type { ContextViewFill, ContextViewWindow } from '../../types'
 import Limits from '../limits'
 import type { Cell } from './cell.js'
 
-/**
- * The meter's cells, left to right, as /context lays its grid out: the
- * context's whole cells, the one it part fills, the window left, and at the
- * end the reserve, everything past the compaction threshold.
- *
- * The meter spans the model's window, as the percentage and the token count
- * do, so where a setting caps the window compaction measures against, the
- * capped part is reserve too. A context past the threshold fills the
- * reserve's cells.
- *
- * @param window the window, its compaction limit and its reserve
- * @param fill the context's tokens
- * @param cells how many cells across
- * @returns one cell kind per cell
- */
 export function meterOf(
   window: ContextViewWindow,
   fill: ContextViewFill,

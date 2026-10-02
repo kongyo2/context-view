@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Readings from '../../hooks/readings'
+
+tier('user')
 
 describe('tokens-of', () => {
   test("a request's input is its three input counts together", () => {

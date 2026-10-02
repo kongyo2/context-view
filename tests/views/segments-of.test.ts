@@ -1,7 +1,9 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Views from '../../hooks/views'
 import Fixtures from '../fixtures'
+
+tier('user')
 
 describe('segments-of', () => {
   test('calm: the percentage in colour, the tokens and the headroom dim', () => {

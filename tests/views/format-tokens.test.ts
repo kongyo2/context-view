@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Views from '../../hooks/views'
+
+tier('user')
 
 describe('format-tokens', () => {
   test('under a thousand, the count itself', () => {

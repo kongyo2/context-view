@@ -1,6 +1,8 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, test, tier } from 'claude-code/testing'
 
 import Glyphs from '../../hooks/glyphs'
+
+tier('user')
 
 describe('glyphs-of', () => {
   test("the pills, Claude Code's own meter marks, wherever it draws them", () => {

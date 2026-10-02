@@ -1,9 +1,5 @@
 import type { ClassicFields } from 'claude-code/testing'
 
-/**
- * `/model` switching the session to another model, as the engine raises
- * PostModelSwitch once the switch is made.
- */
 export const MODEL_SWITCH: ClassicFields<'PostModelSwitch'> = {
   from_model: 'claude-test',
   to_model: 'claude-test-wide',
