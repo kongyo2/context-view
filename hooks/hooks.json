@@ -1,4 +1,4 @@
 {
-  "description": "The context view: its row above the prompt, the readings it takes whenever the window moves (the session's start, /clear, a resume or a branch, each turn and request of one, a compaction, a model switch, a change to auto-compact), a check of the engine's live figures every two seconds, and /context-view to hide and show it",
+  "description": "The context view: its row above the prompt, the readings it takes whenever the window moves (the session's start, /clear, a resume or a branch, each turn and request of one, the engine's own figure for a request that consulted the advisor, a compaction, a model switch, a change to auto-compact), a check of the engine's live figures every two seconds, and /context-view to hide and show it; every event it hooks but its own command and the band is passed on unchanged",
   "modules": ["./register.ts"]
 }

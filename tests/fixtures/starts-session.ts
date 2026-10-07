@@ -18,6 +18,8 @@ export function startsSession(
     lag: 0,
     asked: [],
     compaction: { messages: [SUMMARY] },
+    sessionStart: {},
+    modelSwitch: {},
     refusals: {},
     logs: [],
     clock: mock.clock(on),
@@ -26,12 +28,19 @@ export function startsSession(
   mock.env(on, variables)
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('classic.SessionStart', () => ({}))
-  on('classic.PostModelSwitch', () => ({}))
+  on('classic.SessionStart', () => world.sessionStart)
+  on('classic.PostModelSwitch', () => world.modelSwitch)
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('session.compact', () => world.compaction)
-  on('config.set', ($, e) => ({ value: e.value }))
   on('command.run', () => ({ text: 'run by Claude Code' }))
+
+  on('config.set', ($, e) => {
+    if (world.refusals.config !== undefined) {
+      return { deny: world.refusals.config }
+    }
+
+    return { value: e.value }
+  })
 
   on('command.register', ($, e) => {
     if (world.refusals.register !== undefined) {

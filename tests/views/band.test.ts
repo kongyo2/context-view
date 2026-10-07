@@ -50,9 +50,14 @@ describe('band', () => {
       'one line, cut at the end rather than wrapped',
     ).toBe('truncate-end')
 
-    expect(await ui.find({ type: 'Box' })).toMatchObject({
-      props: { paddingLeft: 2, paddingRight: 4 },
-    })
+    const box = await ui.find({ type: 'Box' })
+
+    expect(box).toMatchObject({ props: { paddingLeft: 2 } })
+
+    expect(
+      box?.props.paddingRight,
+      "the engine keeps its [-] outside the band's columns",
+    ).toBeUndefined()
 
     await ui.unmount()
   })
@@ -114,11 +119,11 @@ describe('band', () => {
     await ui.unmount()
   })
 
-  test("the right end stays clear for the engine's [-] and the cell before it", async ($, on) => {
+  test('the row fills every column the engine gives the band, its [-] already outside them', async ($, on) => {
     Fixtures.drawsBand(on, Fixtures.WINDOW, Fixtures.fillAt(84_100))
 
     const exact = await $.ui.mount({
-      ...Fixtures.bandAt(78),
+      ...Fixtures.bandAt(74),
       surface: 'terminal',
     })
 
@@ -129,13 +134,13 @@ describe('band', () => {
     await exact.unmount()
 
     const short = await $.ui.mount({
-      ...Fixtures.bandAt(77),
+      ...Fixtures.bandAt(73),
       surface: 'terminal',
     })
 
     expect(
       Fixtures.textOf(await short.drawn()),
-      'a cell short, the meter narrows rather than meet the [-]',
+      'a cell short, the meter narrows rather than the row being cut',
     ).toBe('▰'.repeat(5) + '▱'.repeat(5) + '▰'.repeat(2) + TEXT)
 
     await short.unmount()
@@ -145,7 +150,7 @@ describe('band', () => {
     Fixtures.drawsBand(on, Fixtures.WINDOW, Fixtures.fillAt(84_100))
 
     const twelve = await $.ui.mount({
-      ...Fixtures.bandAt(70),
+      ...Fixtures.bandAt(66),
       surface: 'terminal',
     })
 
@@ -156,7 +161,7 @@ describe('band', () => {
     await twelve.unmount()
 
     const eight = await $.ui.mount({
-      ...Fixtures.bandAt(66),
+      ...Fixtures.bandAt(62),
       surface: 'terminal',
     })
 
@@ -171,7 +176,7 @@ describe('band', () => {
     Fixtures.drawsBand(on, Fixtures.WINDOW, Fixtures.fillAt(84_100))
 
     const tokens = await $.ui.mount({
-      ...Fixtures.bandAt(65),
+      ...Fixtures.bandAt(61),
       surface: 'terminal',
     })
 
@@ -185,7 +190,7 @@ describe('band', () => {
     await tokens.unmount()
 
     const percent = await $.ui.mount({
-      ...Fixtures.bandAt(26),
+      ...Fixtures.bandAt(22),
       surface: 'terminal',
     })
 

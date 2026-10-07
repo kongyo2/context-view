@@ -22,13 +22,10 @@ export function band(
   const { Box, Text } = kit.ui
   const color = Levels.LEVEL_COLORS[Levels.levelOf(window, fill)]
 
-  const fit = fitOf(
-    kit.columns - Limits.BAND_INSET - Limits.COLLAPSE_RESERVE,
-    segmentsOf(window, fill),
-  )
+  const fit = fitOf(kit.columns - Limits.BAND_INSET, segmentsOf(window, fill))
 
   const row = (
-    <Box paddingLeft={Limits.BAND_INSET} paddingRight={Limits.COLLAPSE_RESERVE}>
+    <Box paddingLeft={Limits.BAND_INSET}>
       <Text wrap="truncate-end">
         {bar(kit, Meter.meterOf(window, fill, fit.cells), color)}
         {Glyphs.GAP}

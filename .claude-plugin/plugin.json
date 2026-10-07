@@ -1,11 +1,17 @@
 {
   "name": "context-view",
-  "version": "0.2.0",
+  "displayName": "Context View",
+  "version": "0.3.0",
   "description": "The context window as one row above the prompt, drawn the way Claude Code draws its own meters: the context's cells, the percentage used, the tokens over the window, and the tokens left before auto-compact. /context-view hides and shows it.",
   "author": {
     "name": "kongyo2"
   },
   "homepage": "https://github.com/kongyo2/context-view",
   "repository": "https://github.com/kongyo2/context-view",
+  "documentationUrl": "https://github.com/kongyo2/context-view#readme",
+  "supportUrl": "https://github.com/kongyo2/context-view/issues",
+  "license": "MIT",
+  "keywords": ["context-window", "auto-compact", "meter", "mod"],
+  "icon": "./.claude-plugin/icon.png",
   "types": "./types/index.d.ts"
 }

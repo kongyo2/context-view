@@ -1,7 +1,7 @@
 /* @jsxRuntime classic */
 /* @jsx h */
 /* @jsxFrag Fragment */
-import type { RenderElement, TextProps } from 'claude-code'
+import type { RenderElement, TextProps, ThemeKey } from 'claude-code'
 
 import Meter from '../meter'
 import type { Kit } from './kit.js'
@@ -9,7 +9,7 @@ import type { Kit } from './kit.js'
 export function bar(
   kit: Kit,
   cells: readonly Meter.Cell[],
-  color: string,
+  color: ThemeKey,
 ): RenderElement {
   const { Text } = kit.ui
 
@@ -30,7 +30,7 @@ function markOf(cell: Meter.Cell, kit: Kit): string {
   return isTaken ? kit.glyphs.fill : kit.glyphs.empty
 }
 
-function styleOf(cell: Meter.Cell, color: string): TextProps {
+function styleOf(cell: Meter.Cell, color: ThemeKey): TextProps {
   const isContext = cell === 'used' || cell === 'partial'
 
   return isContext ? { color } : { dimColor: true }

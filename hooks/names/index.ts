@@ -1,7 +1,6 @@
 export * from './before-limit-text.js'
 export * from './command-argument-hint.js'
 export * from './command-description.js'
-export * from './command-name.js'
 export * from './compact-next-text.js'
 export * from './hidden-text.js'
 export * from './hide-words.js'
