@@ -1,4 +1,5 @@
 export * from './fill-of.js'
+export * from './is-loop-total.js'
 export * from './is-outdated.js'
 export * from './percent-of.js'
 export * from './tokens-of.js'

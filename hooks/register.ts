@@ -39,7 +39,7 @@ export function register(on: On): void {
   on('session.start', async ($, e, next) => {
     try {
       await $.command.register({
-        name: Names.COMMAND_NAME,
+        name: 'context-view',
         description: Names.COMMAND_DESCRIPTION,
         argumentHint: Names.COMMAND_ARGUMENT_HINT,
         immediate: true,
@@ -64,13 +64,11 @@ export function register(on: On): void {
     'classic.SessionStart',
     { source: ['clear', 'resume', 'fork'] },
     async ($, e, next) => {
-      const result = await next(e)
-
       await loadHidden($)
       await measure($)
       settle($)
 
-      return result
+      return next(e)
     },
   )
 
@@ -101,7 +99,14 @@ export function register(on: On): void {
   on('turn.step', async function* ($, e, next) {
     const result = yield* next(e)
 
-    if (e.agentId === undefined && result.usage) {
+    if (e.agentId !== undefined || !result.usage) {
+      return result
+    }
+
+    if (Readings.isLoopTotal(result)) {
+      await measure($)
+      settle($)
+    } else {
       await follow($, result.usage)
     }
 
@@ -122,22 +127,16 @@ export function register(on: On): void {
     },
   )
 
-  on('classic.PostModelSwitch', async ($, e, next) => {
-    const result = await next(e)
-
+  on('classic.PostModelSwitch', ($, e, next) => {
     settle($)
 
-    return result
+    return next(e)
   })
 
-  on('config.set', { key: 'autoCompact' }, async ($, e, next) => {
-    const result = await next(e)
+  on('config.set', { key: 'autoCompact' }, ($, e, next) => {
+    settle($)
 
-    if (result.deny === undefined) {
-      settle($)
-    }
-
-    return result
+    return next(e)
   })
 
   on(

@@ -1,4 +1,5 @@
 import type {
+  ClassicResultOf,
   CommandSpec,
   SessionCompactResult,
   SessionUsage,
@@ -12,11 +13,14 @@ export type World = {
   lag: number
   asked: unknown[]
   compaction: SessionCompactResult
+  sessionStart: ClassicResultOf['classic.SessionStart']
+  modelSwitch: ClassicResultOf['classic.PostModelSwitch']
   refusals: {
     register?: string
     breakdown?: string
     load?: string
     save?: string
+    config?: string
   }
   logs: string[]
   clock: MockClock

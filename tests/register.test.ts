@@ -1,3 +1,4 @@
+import type { TurnStepServerToolUse } from 'claude-code'
 import { describe, expect, test, tier } from 'claude-code/testing'
 import type { FoundElement } from 'claude-code/testing'
 
@@ -154,6 +155,80 @@ describe('register', () => {
       await ui.find({ type: 'Text', text: /^50%$/ }),
       "a subagent's request is not the main window's",
     ).toBeDefined()
+
+    await ui.unmount()
+  })
+
+  test("a request that consulted the advisor never draws its passes' summed count: the engine's own figure stands", async ($, on) => {
+    let tokens = 60_000
+    let uses: readonly TurnStepServerToolUse[] = []
+
+    const world = Fixtures.startsSession(on, 40_000)
+
+    Fixtures.answersSteps(
+      on,
+      () => tokens,
+      1,
+      () => uses,
+    )
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    await Fixtures.readToEnd($.turn.step(Fixtures.stepOf()))
+
+    expect(await percentOf(ui)).toEqual(['30%'])
+
+    tokens = 122_000
+    uses = [Fixtures.ADVISOR_USE]
+    world.usage = Fixtures.usageOf(62_000)
+
+    await Fixtures.readToEnd($.turn.step(Fixtures.stepOf()))
+
+    expect(
+      await percentOf(ui),
+      'the API sums the passes before and after the advice; the window is the last pass',
+    ).toEqual(['31%'])
+
+    expect(
+      await ui.find({ type: 'Text', text: /^62k\/200k tokens$/ }),
+    ).toBeDefined()
+
+    await ui.unmount()
+  })
+
+  test('a consulted request whose figure the engine lands late keeps the last reading until it lands', async ($, on) => {
+    let tokens = 60_000
+    let uses: readonly TurnStepServerToolUse[] = []
+
+    const world = Fixtures.startsSession(on, 40_000)
+
+    Fixtures.answersSteps(
+      on,
+      () => tokens,
+      1,
+      () => uses,
+    )
+
+    await $.session.start(Fixtures.SESSION)
+
+    const ui = await $.ui.mount({ ...Fixtures.bandAt(), surface: 'terminal' })
+
+    await Fixtures.readToEnd($.turn.step(Fixtures.stepOf()))
+
+    world.usage = Fixtures.usageOf(60_000)
+    tokens = 122_000
+    uses = [Fixtures.ADVISOR_USE]
+
+    await Fixtures.readToEnd($.turn.step(Fixtures.stepOf()))
+
+    expect(await percentOf(ui), 'never the summed count').toEqual(['30%'])
+
+    world.usage = Fixtures.usageOf(62_000)
+    await world.clock.advance(Fixtures.FIRST_READING_MS)
+
+    expect(await percentOf(ui)).toEqual(['31%'])
 
     await ui.unmount()
   })
@@ -789,6 +864,51 @@ describe('register', () => {
       await ui.unmount()
     },
   )
+
+  test('every hook on a settings-hook event, a command, /config or a compaction hands back what answered beneath it, untouched', async ($, on) => {
+    const world = Fixtures.startsSession(on, 84_100)
+
+    world.sessionStart = {
+      initialUserMessage: 'Carry on with the plan.',
+      additionalContext: ['from a SessionStart hook'],
+    }
+
+    world.modelSwitch = { additionalContext: ['from a PostModelSwitch hook'] }
+    world.refusals.config = 'auto-compact is set by policy'
+
+    await $.session.start(Fixtures.SESSION)
+
+    for (const source of ['clear', 'resume', 'fork'] as const) {
+      expect(
+        await $.classic.SessionStart({ source }),
+        `the session's first message after ${source}`,
+      ).toEqual(world.sessionStart)
+    }
+
+    expect(await $.classic.PostModelSwitch(Fixtures.MODEL_SWITCH)).toEqual(
+      world.modelSwitch,
+    )
+
+    expect(await $.config.set(Fixtures.AUTO_COMPACT_OFF)).toEqual({
+      deny: 'auto-compact is set by policy',
+    })
+
+    for (const command of [
+      'clear',
+      'resume',
+      'branch',
+      'autocompact',
+      'model',
+    ]) {
+      expect(await $.command.run(Fixtures.commandOf(command)), command).toEqual(
+        { text: 'run by Claude Code' },
+      )
+    }
+
+    expect(await $.session.compact(Fixtures.compactOf('manual'))).toEqual(
+      world.compaction,
+    )
+  })
 
   test('a reload whose read of the stored choice fails keeps the band as it was', async ($, on) => {
     const world = Fixtures.startsSession(on, 84_100)
