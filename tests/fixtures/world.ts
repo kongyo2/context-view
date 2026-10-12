@@ -3,6 +3,7 @@ import type {
   CommandSpec,
   SessionCompactResult,
   SessionUsage,
+  ToolCallResult,
 } from 'claude-code'
 import type { MockClock } from 'claude-code/testing'
 
@@ -15,6 +16,7 @@ export type World = {
   compaction: SessionCompactResult
   sessionStart: ClassicResultOf['classic.SessionStart']
   modelSwitch: ClassicResultOf['classic.PostModelSwitch']
+  tool: ToolCallResult
   refusals: {
     register?: string
     breakdown?: string

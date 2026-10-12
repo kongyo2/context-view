@@ -2,12 +2,14 @@ import { atom, read, update } from 'claude-code'
 import type {
   EngineInterface,
   On,
+  PluginOptions,
   SessionContextUsage,
   SessionUsage,
   Timer,
   TurnUsage,
 } from 'claude-code'
 
+import Awareness from './awareness'
 import Command from './command'
 import Glyphs from './glyphs'
 import Limits from './limits'
@@ -28,11 +30,17 @@ const isHidden = atom(
   false,
 )
 
+const contextNoted = atom(
+  { plugin: 'context-view', key: 'noted' } as const,
+  null,
+)
+
 let latest = 0
 
 let knownHidden: boolean | undefined
 
-export function register(on: On): void {
+export function register(on: On, options: PluginOptions): void {
+  const awareness = Awareness.awarenessOf(options)
   let glyphs: Glyphs.GlyphSet = Glyphs.PILL_GLYPHS
   let rechecking: Timer | undefined
 
@@ -52,6 +60,7 @@ export function register(on: On): void {
 
     glyphs = await glyphsFor($)
     await loadHidden($)
+    await forgetNoted($)
     await measure($)
 
     rechecking?.cancel()
@@ -192,6 +201,39 @@ export function register(on: On): void {
       await next(e),
     )
   })
+
+  if (awareness?.isOnPrompts) {
+    on('prompt.submit', async ($, e, next) => {
+      const note = await noteFor($, awareness, true)
+
+      if (note === undefined) {
+        return next(e)
+      }
+
+      return next({ ...e, context: [...(e.context ?? []), note] })
+    })
+  }
+
+  if (awareness?.isOnToolResults) {
+    on('tool.call', async ($, e, next) => {
+      const result = await next(e)
+
+      const isClaudeOwn =
+        e.agentId === undefined && next.origin.plugin === 'engine'
+
+      if (!isClaudeOwn || result.deny !== undefined) {
+        return result
+      }
+
+      const note = await noteFor($, awareness, false)
+
+      if (note === undefined) {
+        return result
+      }
+
+      return { ...result, context: [...(result.context ?? []), note] }
+    })
+  }
 }
 
 async function glyphsFor($: EngineInterface): Promise<Glyphs.GlyphSet> {
@@ -295,6 +337,44 @@ function recheckEvery($: EngineInterface): Timer | undefined {
     return $.clock.every(Limits.RECHECK_MS, () => void recheck($))
   } catch (error) {
     $.ui.log(Names.readingFailedTextOf(messageOf(error)), { to: 'debug' })
+
+    return undefined
+  }
+}
+
+async function forgetNoted($: EngineInterface): Promise<void> {
+  await update($, contextNoted, () => null).catch(() => undefined)
+}
+
+async function noteFor(
+  $: EngineInterface,
+  awareness: Awareness.Awareness,
+  isEveryTime: boolean,
+): Promise<string | undefined> {
+  try {
+    const measured = await read($, contextWindow)
+    const filled = await read($, contextFill)
+
+    if (!measured || !filled) {
+      return undefined
+    }
+
+    if (!Awareness.isActive(awareness, measured, filled)) {
+      return undefined
+    }
+
+    let isNoted = false
+
+    await update($, contextNoted, noted => {
+      isNoted =
+        isEveryTime || Awareness.isDue(awareness, measured, filled, noted)
+
+      return isNoted ? Awareness.notedOf(measured, filled) : noted
+    })
+
+    return isNoted ? Awareness.noteTextOf(measured, filled) : undefined
+  } catch (error) {
+    $.ui.log(Names.noteFailedTextOf(messageOf(error)), { to: 'debug' })
 
     return undefined
   }

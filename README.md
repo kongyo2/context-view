@@ -9,6 +9,11 @@ joined by Claude Code's byline separator.
 
     ▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱▰▰▰  42% · 84.1k/200k tokens · 82.9k until auto-compact
 
+The row is for you. With the `awareness` option on, Claude itself reads
+the same figures, as one line after your prompts and its tool results,
+from the point you set, such as 400k tokens: see
+[Telling Claude](#telling-claude).
+
 The row follows the session after every main-thread turn and after every
 request of a running turn, so it moves while a long turn works; a
 subagent's requests are left out. It reads the window again whenever the
@@ -114,15 +119,80 @@ importing `claude-code` and one another alone. `types/index.d.ts` declares
 the values the module keeps in `$.state`, so they survive a hot reload and
 each write draws the row again.
 
+## Telling Claude
+
+Claude reads none of the row. With the `awareness` option on, it reads
+the same figures as one line of its own, so it knows how much room is
+left before auto-compact and can plan its work around it:
+
+    context-view: your context holds 412.3k/1m tokens (41%); 554.7k until auto-compact
+
+The line follows each prompt you send, and the results of Claude's own
+tool calls while a turn runs, once the context has reached the point the
+options set. After a prompt it is there every time; after a tool result
+only when the context has grown by `awarenessStep` since Claude was
+last told, when the row changes colour, or when the context has shrunk, as
+after a compaction, so a turn of many small calls carries a handful of
+lines, not one a call. Results that land together, from one request,
+carry it once, and a reload of the module, as turning the option on again
+in `/config` makes, starts afresh: the next tool result tells Claude
+again. Its figures are the row's: an estimate is marked `~`, past the
+threshold the line ends `auto-compact next`, and with auto-compact off it
+says so and counts down to the limit (`auto-compact off, 92.9k before the
+limit`). A subagent's tool results, a call another plugin makes, and a
+call that was refused carry nothing, and nothing is added before the
+first reading. The line does not depend on the row: it is there while the
+row is hidden too.
+
+The line is added after the prompt or the tool result, as a settings
+hook's context is, and is never changed afterwards. The system prompt and
+everything before the line stay as they were, so the prompt cache keeps
+matching.
+
+Each option is a row in `/config`, and `/plugin configure
+context-view@context-view` sets them together:
+
+| option | `/config` row | what it does | default |
+| --- | --- | --- | --- |
+| `awareness` | Tell Claude its context | Turns the line on. | off |
+| `awarenessFrom` | Tell Claude from (tokens held) | Claude is told once its context holds this many tokens, such as `400000`. `0` leaves this out. | `0` |
+| `awarenessWithin` | Or within (tokens of auto-compact) | Claude is also told once auto-compact is this many tokens away or nearer, such as `100000`, whichever of the two comes first. `0` leaves this out; with both left out, Claude is told from the start. | `0` |
+| `awarenessStep` | Tell again every (tokens) | How much the context grows before a tool result tells Claude again. `0` tells it after each tool result once the context has grown at all. | `20000` |
+| `awarenessAt` | Tell Claude after | `prompts-and-tool-results`, `prompts` or `tool-results`. | `prompts-and-tool-results` |
+
+They are kept in your settings under `pluginConfigs`, so Claude is told
+from 400k tokens on with
+
+```json
+{
+  "pluginConfigs": {
+    "context-view@context-view": {
+      "options": {
+        "awareness": true,
+        "awarenessFrom": 400000
+      }
+    }
+  }
+}
+```
+
+A change in `/config` reloads the module with the new values. With
+`awareness` off, as it is by default, the module hooks neither prompts nor
+tool calls.
+
 ## What it changes
 
-Nothing but the band. Apart from drawing the row and answering its own
-`/context-view`, every hook passes its event on and hands back what
-Claude Code, and any settings hook or mod after it, answered, unchanged:
-no prompt, tool call, permission, setting, command, compaction or first
-message of a session is rewritten, answered, refused or added to. The
-hooks listed below that sit on a settings-hook event, or on an event that
-is also the name of a call on `$`, say so, and what each does there.
+With `awareness` off, as it is by default, nothing but the band. Apart
+from drawing the row and answering its own `/context-view`, every hook
+passes its event on and hands back what Claude Code, and any settings hook
+or mod after it, answered, unchanged: no prompt, tool call, permission,
+setting, command, compaction or first message of a session is rewritten,
+answered, refused or added to. With `awareness` on, one thing more: the
+line for Claude is added after a prompt or a tool result, after whatever
+else was added there, while the prompt, the call and its result stay as
+they were. The hooks listed below that sit on a settings-hook event, or on
+an event that is also the name of a call on `$`, say so, and what each
+does there.
 
 ## What it hooks
 
@@ -139,6 +209,8 @@ is also the name of a call on `$`, say so, and what each does there.
 | `command.run` of `autocompact`, `model` | Passes the command on, then reads the window it set. As above, it sees these commands whoever runs them, never answers or rewrites one, and hands back Claude Code's own result. |
 | `command.run` of `context-view` | Answers the plugin's own command: hides or shows the row as asked, keeps the choice in the store, and says which. |
 | `ui.render` of `AbovePrompt` | Draws the row above what the mods after it draw; passes while a survey holds the band, while the row is hidden, and while there is nothing to draw. |
+| `prompt.submit` | Hooked only with `awareness` on and `awarenessAt` other than `tool-results`. Once the options say Claude is told, adds the line after the prompt, after any context another hook added, and passes the prompt on as typed; Claude reads the line, and you never see it. |
+| `tool.call` | Hooked only with `awareness` on and `awarenessAt` other than `prompts`. Lets the call run, then, for a call Claude made in the main conversation that was not refused, adds the line after the result when it is due, and hands back the result otherwise as Claude Code answered it. The event is also the call `$.tool.call`, and a call another plugin makes gets nothing, as no line reaches Claude from it. |
 
 ## What it calls on `$`
 
@@ -152,10 +224,12 @@ figures where that fails), `state.get`, `state.set`, `store.get`,
 ## What it reads and sends
 
 It reads the session's own context figures through `$.session.usage`, the
-`TERM` and `TERM_PROGRAM` environment variables, and the one choice it
-keeps in its store; it writes that choice to its store and its failures to
-the debug log. It reads no file, starts no process, calls no model and
-makes no network request, so nothing it reads leaves the machine.
+`TERM` and `TERM_PROGRAM` environment variables, its options, and the one
+choice it keeps in its store; it writes that choice to its store and its
+failures to the debug log. It reads no file, starts no process, calls no
+model and makes no network request. With `awareness` off nothing it reads
+leaves the machine; with it on, the line for Claude goes to the model with
+the rest of the conversation Claude Code sends, and nowhere else.
 
 ## Try it
 
@@ -164,8 +238,10 @@ claude --plugin-dir /path/to/context-view
 ```
 
 The row appears above the prompt as soon as the session is up: the
-estimate in a new session, the restored figure in a resumed one. Claude
-Code 2.1.290 or later; tested on 2.1.292.
+estimate in a new session, the restored figure in a resumed one. To try
+the line for Claude, turn on `Tell Claude its context` in `/config`; for a
+plugin loaded this way the options are kept under `pluginConfigs` as
+`context-view`. Claude Code 2.1.290 or later; tested on 2.1.296.
 
 ## Install
 
@@ -175,7 +251,9 @@ This repository is its own marketplace. In a Claude Code session:
 /plugin install context-view --marketplace kongyo2/context-view
 ```
 
-Answer `y` to add the marketplace, then pick a scope. Or in three steps:
+Answer `y` to add the marketplace, then pick a scope; the options screen
+that follows can be left as it is, `awareness` staying off until you turn
+it on. Or in three steps:
 
 ```text
 /plugin marketplace add kongyo2/context-view
@@ -196,8 +274,13 @@ of each kind, a model switch, `/config` and `/autocompact`, a rewind, a
 reading that resolves late, `/context-view` and its words, a survey,
 another mod's note, the built-in guard, what each hook hands back, failed
 readings, refused calls, Ghostty) on the terminal and the desktop, and
-`tests/views/band.test.ts` reads the drawn row at each width and level, as
-an estimate, and over a capped window.
+through prompts and tool results with `awareness` off and on (from 400k
+tokens, within 50k of auto-compact, the step, the row's colours, a shrunk
+context, results that land together, a reload, after prompts or tool
+results alone, a refused call, auto-compact off, an estimate, no
+reading); `tests/views/band.test.ts` reads the drawn row at each width and
+level, as an estimate, and over a capped window, and `tests/awareness/`
+reads the options and the line for Claude.
 
     claude plugin validate --strict .claude-plugin/plugin.json
 
