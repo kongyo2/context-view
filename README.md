@@ -133,13 +133,16 @@ options set. After a prompt it is there every time; after a tool result
 only when the context has grown by `awarenessStep` since Claude was
 last told, when the row changes colour, or when the context has shrunk, as
 after a compaction, so a turn of many small calls carries a handful of
-lines, not one a call. Its figures are the row's: an estimate is marked
-`~`, past the threshold the line ends `auto-compact next`, and with
-auto-compact off it says so and counts down to the limit (`auto-compact
-off, 92.9k before the limit`). A subagent's tool results, a call another
-plugin makes, and a call that was refused carry nothing, and nothing is
-added before the first reading. The line does not depend on the row: it
-is there while the row is hidden too.
+lines, not one a call. Results that land together, from one request,
+carry it once, and a reload of the module, as turning the option on again
+in `/config` makes, starts afresh: the next tool result tells Claude
+again. Its figures are the row's: an estimate is marked `~`, past the
+threshold the line ends `auto-compact next`, and with auto-compact off it
+says so and counts down to the limit (`auto-compact off, 92.9k before the
+limit`). A subagent's tool results, a call another plugin makes, and a
+call that was refused carry nothing, and nothing is added before the
+first reading. The line does not depend on the row: it is there while the
+row is hidden too.
 
 The line is added after the prompt or the tool result, as a settings
 hook's context is, and is never changed afterwards. The system prompt and
@@ -273,10 +276,11 @@ another mod's note, the built-in guard, what each hook hands back, failed
 readings, refused calls, Ghostty) on the terminal and the desktop, and
 through prompts and tool results with `awareness` off and on (from 400k
 tokens, within 50k of auto-compact, the step, the row's colours, a shrunk
-context, after prompts or tool results alone, a refused call, auto-compact
-off, an estimate, no reading); `tests/views/band.test.ts` reads the drawn
-row at each width and level, as an estimate, and over a capped window, and
-`tests/awareness/` reads the options and the line for Claude.
+context, results that land together, a reload, after prompts or tool
+results alone, a refused call, auto-compact off, an estimate, no
+reading); `tests/views/band.test.ts` reads the drawn row at each width and
+level, as an estimate, and over a capped window, and `tests/awareness/`
+reads the options and the line for Claude.
 
     claude plugin validate --strict .claude-plugin/plugin.json
 

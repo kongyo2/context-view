@@ -1234,6 +1234,53 @@ describe('register', () => {
   )
 
   test(
+    'tool results that land together carry the line once',
+    { options: { awareness: true, awarenessAt: 'tool-results' } },
+    async ($, on) => {
+      Fixtures.startsSession(on, 84_100)
+
+      await $.session.start(Fixtures.SESSION)
+
+      const results = await Promise.all(
+        ['toolu_1', 'toolu_2', 'toolu_3'].map(id =>
+          $.tool.call({ ...Fixtures.TOOL_USE, tool_use_id: id }),
+        ),
+      )
+
+      expect(
+        results.flatMap(result => result.context ?? []),
+        'one request, one reading, one line',
+      ).toEqual([CALM_NOTE])
+    },
+  )
+
+  test(
+    'a reload, as when the option is turned on again in /config, tells Claude afresh at its next tool result',
+    { options: { awareness: true, awarenessAt: 'tool-results' } },
+    async ($, on) => {
+      Fixtures.startsSession(on, 84_100)
+
+      await $.session.start(Fixtures.SESSION)
+
+      expect((await $.tool.call(Fixtures.TOOL_USE)).context).toEqual([
+        CALM_NOTE,
+      ])
+
+      expect(
+        (await $.tool.call(Fixtures.TOOL_USE)).context,
+        'told already',
+      ).toBeUndefined()
+
+      await $.session.start(Fixtures.SESSION)
+
+      expect(
+        (await $.tool.call(Fixtures.TOOL_USE)).context,
+        'no line reached Claude while the option was off',
+      ).toEqual([CALM_NOTE])
+    },
+  )
+
+  test(
     "after prompts alone, as the option sets, Claude's tool results carry nothing",
     { options: { awareness: true, awarenessAt: 'prompts' } },
     async ($, on) => {

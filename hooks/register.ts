@@ -60,6 +60,7 @@ export function register(on: On, options: PluginOptions): void {
 
     glyphs = await glyphsFor($)
     await loadHidden($)
+    await forgetNoted($)
     await measure($)
 
     rechecking?.cancel()
@@ -341,6 +342,10 @@ function recheckEvery($: EngineInterface): Timer | undefined {
   }
 }
 
+async function forgetNoted($: EngineInterface): Promise<void> {
+  await update($, contextNoted, () => null).catch(() => undefined)
+}
+
 async function noteFor(
   $: EngineInterface,
   awareness: Awareness.Awareness,
@@ -358,15 +363,16 @@ async function noteFor(
       return undefined
     }
 
-    const noted = await read($, contextNoted)
+    let isNoted = false
 
-    if (!isEveryTime && !Awareness.isDue(awareness, measured, filled, noted)) {
-      return undefined
-    }
+    await update($, contextNoted, noted => {
+      isNoted =
+        isEveryTime || Awareness.isDue(awareness, measured, filled, noted)
 
-    await update($, contextNoted, () => Awareness.notedOf(measured, filled))
+      return isNoted ? Awareness.notedOf(measured, filled) : noted
+    })
 
-    return Awareness.noteTextOf(measured, filled)
+    return isNoted ? Awareness.noteTextOf(measured, filled) : undefined
   } catch (error) {
     $.ui.log(Names.noteFailedTextOf(messageOf(error)), { to: 'debug' })
 
