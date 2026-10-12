@@ -1,0 +1,1 @@
+export const WIDE_WINDOW_TOKENS = 1_000_000

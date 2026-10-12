@@ -22,6 +22,10 @@ const percentOf = async (ui: {
 const readingsOf = (world: Fixtures.World) =>
   world.asked.filter(asked => asked === 'summary').length
 
+const CALM_NOTE =
+  'context-view: your context holds 84.1k/200k tokens (42%); ' +
+  '82.9k until auto-compact'
+
 describe('register', () => {
   test("the start registers /context-view, its words hinted, and draws the session's context on every surface", async ($, on) => {
     const world = Fixtures.startsSession(on, 84_100)
@@ -1074,4 +1078,247 @@ describe('register', () => {
 
     await desktop.unmount()
   })
+
+  test('with awareness off, as by default, prompts and tool results reach Claude as they came', async ($, on) => {
+    Fixtures.startsSession(on, 84_100)
+
+    await $.session.start(Fixtures.SESSION)
+
+    expect(await $.prompt.submit(Fixtures.promptOf())).toEqual({
+      text: 'Carry on.',
+    })
+
+    expect(await $.tool.call(Fixtures.TOOL_USE)).toEqual({ result: 'ok' })
+  })
+
+  test(
+    'with awareness on, Claude reads its context after every prompt, after what other hooks attached, the band hidden or not',
+    { options: { awareness: true } },
+    async ($, on) => {
+      Fixtures.startsSession(on, 84_100)
+
+      await $.session.start(Fixtures.SESSION)
+
+      expect(await $.prompt.submit(Fixtures.promptOf())).toEqual({
+        text: 'Carry on.',
+        context: [CALM_NOTE],
+      })
+
+      await $.command.run(Fixtures.commandOf('context-view', 'hide'))
+
+      expect(
+        await $.prompt.submit(Fixtures.promptOf(['Current branch: main'])),
+      ).toEqual({
+        text: 'Carry on.',
+        context: ['Current branch: main', CALM_NOTE],
+      })
+    },
+  )
+
+  test(
+    'from 400k tokens, as the option sets: nothing before the context holds them, the note once it does',
+    { options: { awareness: true, awarenessFrom: 400_000 } },
+    async ($, on) => {
+      const world = Fixtures.startsSession(on)
+
+      world.usage = Fixtures.usageOf(350_000, {
+        window: Fixtures.WIDE_WINDOW_TOKENS,
+      })
+
+      await $.session.start(Fixtures.SESSION)
+
+      expect(await $.prompt.submit(Fixtures.promptOf())).toEqual({
+        text: 'Carry on.',
+      })
+
+      expect(await $.tool.call(Fixtures.TOOL_USE)).toEqual({ result: 'ok' })
+
+      world.usage = Fixtures.usageOf(450_000, {
+        window: Fixtures.WIDE_WINDOW_TOKENS,
+      })
+
+      await $.session.measure(
+        Fixtures.measureOf(450_000, Fixtures.WIDE_WINDOW_TOKENS),
+      )
+
+      expect(await $.prompt.submit(Fixtures.promptOf())).toEqual({
+        text: 'Carry on.',
+        context: [
+          'context-view: your context holds 450k/1m tokens (45%); ' +
+            '517k until auto-compact',
+        ],
+      })
+
+      expect(
+        await $.tool.call(Fixtures.TOOL_USE),
+        'the prompt told Claude, and the context has not grown since',
+      ).toEqual({ result: 'ok' })
+    },
+  )
+
+  test(
+    'within 50k of auto-compact, as the option sets: nothing before, the note once that much or less is left',
+    { options: { awareness: true, awarenessWithin: 50_000 } },
+    async ($, on) => {
+      const world = Fixtures.startsSession(on, 84_100)
+
+      await $.session.start(Fixtures.SESSION)
+
+      expect(await $.prompt.submit(Fixtures.promptOf())).toEqual({
+        text: 'Carry on.',
+      })
+
+      world.usage = Fixtures.usageOf(134_400)
+      await $.session.measure(Fixtures.measureOf(134_400))
+
+      expect(await $.prompt.submit(Fixtures.promptOf())).toEqual({
+        text: 'Carry on.',
+        context: [
+          'context-view: your context holds 134.4k/200k tokens (67%); ' +
+            '32.6k until auto-compact',
+        ],
+      })
+    },
+  )
+
+  test(
+    "after Claude's tool results it is told once, then again only once the context has grown by the step, the band has changed colour, or the context has shrunk",
+    { options: { awareness: true, awarenessAt: 'tool-results' } },
+    async ($, on) => {
+      const world = Fixtures.startsSession(on, 30_000)
+
+      await $.session.start(Fixtures.SESSION)
+
+      const contextAt = async (tokens: number) => {
+        world.usage = Fixtures.usageOf(tokens)
+        await $.session.measure(Fixtures.measureOf(tokens))
+
+        return (await $.tool.call(Fixtures.TOOL_USE)).context
+      }
+
+      const noteOf = (figures: string) =>
+        `context-view: your context holds ${figures}`
+
+      expect(
+        await $.prompt.submit(Fixtures.promptOf()),
+        'after tool results alone',
+      ).toEqual({ text: 'Carry on.' })
+
+      expect(await contextAt(30_000)).toEqual([
+        noteOf('30k/200k tokens (15%); 137k until auto-compact'),
+      ])
+
+      expect(await contextAt(30_000), 'told already').toBeUndefined()
+      expect(await contextAt(45_000), '15k on').toBeUndefined()
+
+      expect(await contextAt(50_000), '20k on').toEqual([
+        noteOf('50k/200k tokens (25%); 117k until auto-compact'),
+      ])
+
+      expect(await contextAt(69_000), '19k on').toBeUndefined()
+
+      expect(await contextAt(90_000), '40k on').toEqual([
+        noteOf('90k/200k tokens (45%); 77k until auto-compact'),
+      ])
+
+      expect(await contextAt(101_000), 'to the warning colour').toEqual([
+        noteOf('101k/200k tokens (51%); 66k until auto-compact'),
+      ])
+
+      expect(await contextAt(110_000), '9k on').toBeUndefined()
+
+      expect(await contextAt(20_000), 'shrunk').toEqual([
+        noteOf('20k/200k tokens (10%); 147k until auto-compact'),
+      ])
+    },
+  )
+
+  test(
+    "after prompts alone, as the option sets, Claude's tool results carry nothing",
+    { options: { awareness: true, awarenessAt: 'prompts' } },
+    async ($, on) => {
+      Fixtures.startsSession(on, 84_100)
+
+      await $.session.start(Fixtures.SESSION)
+
+      expect(await $.tool.call(Fixtures.TOOL_USE)).toEqual({ result: 'ok' })
+
+      expect(await $.prompt.submit(Fixtures.promptOf())).toEqual({
+        text: 'Carry on.',
+        context: [CALM_NOTE],
+      })
+    },
+  )
+
+  test(
+    'a refused call carries nothing and leaves the note to the next result, after what the tool attached',
+    { options: { awareness: true } },
+    async ($, on) => {
+      const world = Fixtures.startsSession(on, 84_100)
+
+      await $.session.start(Fixtures.SESSION)
+
+      world.tool = { deny: 'Bash is turned off in this project.' }
+
+      expect(await $.tool.call(Fixtures.TOOL_USE)).toEqual({
+        deny: 'Bash is turned off in this project.',
+      })
+
+      world.tool = { result: 'ok', context: ['Contents of /work/AGENTS.md'] }
+
+      expect(await $.tool.call(Fixtures.TOOL_USE)).toEqual({
+        result: 'ok',
+        context: ['Contents of /work/AGENTS.md', CALM_NOTE],
+      })
+    },
+  )
+
+  test(
+    'with auto-compact off Claude reads that it is off and the tokens left before the limit; an estimate is marked as one',
+    { options: { awareness: true } },
+    async ($, on) => {
+      const world = Fixtures.startsSession(on, 84_100)
+
+      world.usage = Fixtures.usageOf(84_100, { isAutoCompact: false })
+
+      await $.session.start(Fixtures.SESSION)
+
+      expect(await $.prompt.submit(Fixtures.promptOf())).toEqual({
+        text: 'Carry on.',
+        context: [
+          'context-view: your context holds 84.1k/200k tokens (42%); ' +
+            'auto-compact off, 92.9k before the limit',
+        ],
+      })
+
+      world.usage = Fixtures.usageOf(undefined, { estimate: 15_900 })
+      await $.classic.SessionStart({ source: 'clear' })
+
+      expect(await $.prompt.submit(Fixtures.promptOf())).toEqual({
+        text: 'Carry on.',
+        context: [
+          'context-view: your context holds ~15.9k/200k tokens (~8%); ' +
+            '~151.1k until auto-compact',
+        ],
+      })
+    },
+  )
+
+  test(
+    'with no reading of the window nothing is attached',
+    { options: { awareness: true } },
+    async ($, on) => {
+      const world = Fixtures.startsSession(on, 84_100)
+
+      world.usage = null
+
+      await $.session.start(Fixtures.SESSION)
+
+      expect(await $.prompt.submit(Fixtures.promptOf())).toEqual({
+        text: 'Carry on.',
+      })
+
+      expect(await $.tool.call(Fixtures.TOOL_USE)).toEqual({ result: 'ok' })
+    },
+  )
 })

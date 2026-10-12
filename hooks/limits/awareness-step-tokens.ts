@@ -1,0 +1,1 @@
+export const AWARENESS_STEP_TOKENS = 20_000

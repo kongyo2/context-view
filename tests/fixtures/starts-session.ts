@@ -20,6 +20,7 @@ export function startsSession(
     compaction: { messages: [SUMMARY] },
     sessionStart: {},
     modelSwitch: {},
+    tool: { result: 'ok' },
     refusals: {},
     logs: [],
     clock: mock.clock(on),
@@ -33,6 +34,12 @@ export function startsSession(
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('session.compact', () => world.compaction)
   on('command.run', () => ({ text: 'run by Claude Code' }))
+  on('tool.call', () => world.tool)
+
+  on('prompt.submit', ($, e) => ({
+    text: e.text,
+    ...(e.context !== undefined && { context: e.context }),
+  }))
 
   on('config.set', ($, e) => {
     if (world.refusals.config !== undefined) {

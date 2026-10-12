@@ -1,8 +1,8 @@
 {
   "name": "context-view",
   "displayName": "Context View",
-  "version": "0.3.0",
-  "description": "The context window as one row above the prompt, drawn the way Claude Code draws its own meters: the context's cells, the percentage used, the tokens over the window, and the tokens left before auto-compact. /context-view hides and shows it.",
+  "version": "0.4.0",
+  "description": "The context window as one row above the prompt, drawn the way Claude Code draws its own meters: the context's cells, the percentage used, the tokens over the window, and the tokens left before auto-compact. /context-view hides and shows it. With the awareness option on, Claude itself reads the same figures in a line after your prompts and its tool results, from the point you set, such as 400k tokens.",
   "author": {
     "name": "kongyo2"
   },
@@ -13,5 +13,41 @@
   "license": "MIT",
   "keywords": ["context-window", "auto-compact", "meter", "mod"],
   "icon": "./.claude-plugin/icon.png",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "awareness": {
+      "type": "boolean",
+      "title": "Tell Claude its context",
+      "description": "Claude itself reads a line with the tokens its context holds and how many are left before auto-compact, after your prompts and its tool results, from the point the options below set. Off by default.",
+      "default": false
+    },
+    "awarenessFrom": {
+      "type": "number",
+      "title": "Tell Claude from (tokens held)",
+      "description": "Claude is told once its context holds this many tokens, such as 400000. 0 leaves this out; with this and the next one both 0, Claude is told from the start.",
+      "default": 0,
+      "min": 0
+    },
+    "awarenessWithin": {
+      "type": "number",
+      "title": "Or within (tokens of auto-compact)",
+      "description": "Claude is also told once auto-compact is this many tokens away or nearer, such as 100000, whatever the count above. 0 leaves this out.",
+      "default": 0,
+      "min": 0
+    },
+    "awarenessStep": {
+      "type": "number",
+      "title": "Tell again every (tokens)",
+      "description": "After a tool result, Claude is told again once its context has grown by this many tokens since it was last told, when the band changes colour, and after the context shrank, as after a compaction. 0 tells it after each tool result once the context has grown at all. After each prompt it is told every time.",
+      "default": 20000,
+      "min": 0
+    },
+    "awarenessAt": {
+      "type": "string",
+      "title": "Tell Claude after",
+      "description": "\"prompts-and-tool-results\" (default): after each prompt you send and after its tool results while it works. \"prompts\": after your prompts only. \"tool-results\": after its tool results only.",
+      "default": "prompts-and-tool-results",
+      "options": ["prompts-and-tool-results", "prompts", "tool-results"]
+    }
+  }
 }

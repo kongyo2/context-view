@@ -1,3 +1,4 @@
+export * from './awareness'
 export * from './command'
 export * from './glyphs'
 export * from './levels'
