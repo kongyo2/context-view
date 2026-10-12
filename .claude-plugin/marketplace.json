@@ -8,7 +8,7 @@
     {
       "name": "context-view",
       "source": "./",
-      "description": "The context window as one row above the prompt, drawn the way Claude Code draws its own meters."
+      "description": "The context window as one row above the prompt, drawn the way Claude Code draws its own meters, and, with the awareness option on, as a line Claude itself reads."
     }
   ]
 }
